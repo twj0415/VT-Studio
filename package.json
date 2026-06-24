@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "packageManager": "pnpm@9.0.0",
   "scripts": {
-    "dev": "pnpm --dir frontend dev",
-    "build": "pnpm --dir frontend build",
-    "typecheck": "pnpm --dir frontend typecheck",
+    "dev": "pnpm --dir src dev",
+    "build": "pnpm --dir src build",
+    "typecheck": "pnpm --dir src typecheck",
     "tauri:dev": "tauri dev --config src-tauri/tauri.conf.json",
     "tauri:build": "tauri build --config src-tauri/tauri.conf.json"
   },

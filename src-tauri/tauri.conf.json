@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "identifier": "com.vt-ai-short-video-maker.app",
   "build": {
-    "beforeDevCommand": "pnpm --dir frontend dev",
-    "beforeBuildCommand": "pnpm --dir frontend build",
+    "beforeDevCommand": "pnpm --dir src dev",
+    "beforeBuildCommand": "pnpm --dir src build",
     "devUrl": "http://127.0.0.1:1420",
-    "frontendDist": "../frontend/dist"
+    "frontendDist": "../src/dist"
   },
   "app": {
     "windows": [

@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 **/node_modules/
+.pnpm-store/
 
 # Build outputs
 dist/
@@ -31,11 +32,10 @@ Desktop.ini
 .vscode/
 
 # Local assistant/tooling state
-.git-real/
 .agents/
 .claude/
 .codex/
 
 # Tauri generated artifacts
-app/src-tauri/target/
-app/frontend/dist/
+src-tauri/target/
+src/dist/
