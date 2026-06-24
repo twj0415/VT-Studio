@@ -1,0 +1,1212 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI 视频生产工具菜单架构图</title>
+  <style>
+    :root {
+      --bg: #151515;
+      --panel: #1d1d1d;
+      --panel-2: #252525;
+      --node: #343434;
+      --node-active: #4a4030;
+      --line: #3e3e3e;
+      --text: #eeeeee;
+      --muted: #a8a8a8;
+      --gold: #d8ad68;
+      --green: #72c9aa;
+      --blue: #83a8ff;
+      --red: #f07c7c;
+      --violet: #b79cff;
+      --font: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+      --mono: Consolas, "Courier New", monospace;
+    }
+
+    * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: #6a5b44 #181818; }
+    *::-webkit-scrollbar { width: 9px; height: 9px; }
+    *::-webkit-scrollbar-track { background: #181818; border: 1px solid #222; }
+    *::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #6a5b44, #3f3a32); border: 2px solid #181818; }
+    *::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #d8ad68, #6a5b44); }
+
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        linear-gradient(90deg, rgba(255,255,255,.026) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(255,255,255,.026) 1px, transparent 1px),
+        radial-gradient(circle at 20% -10%, rgba(216,173,104,.12), transparent 30%),
+        var(--bg);
+      background-size: 34px 34px, 34px 34px, auto, auto;
+      font-family: var(--font);
+      overflow: hidden;
+      letter-spacing: 0;
+    }
+
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+
+    .app {
+      display: grid;
+      grid-template-rows: 58px 1fr;
+      height: 100%;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: 330px minmax(0, 1fr) 380px;
+      gap: 14px;
+      align-items: center;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(21,21,21,.96);
+      z-index: 5;
+    }
+
+    .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      color: #151515;
+      background: var(--gold);
+      font-family: var(--mono);
+      font-weight: 900;
+    }
+
+    .brand h1 { margin: 0; font-size: 15px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .brand p { margin: 2px 0 0; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .tabs { display: flex; gap: 7px; align-items: center; overflow-x: auto; padding-bottom: 1px; }
+    .tab {
+      flex: 0 0 auto;
+      height: 34px;
+      padding: 0 11px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: #202020;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .tab:hover, .tab.active { color: var(--text); border-color: rgba(216,173,104,.58); background: #312b22; }
+
+    .tools { display: flex; justify-content: flex-end; align-items: center; gap: 7px; min-width: 0; }
+    .search {
+      width: 170px;
+      height: 34px;
+      padding: 0 10px;
+      color: var(--text);
+      border: 1px solid var(--line);
+      background: #202020;
+      outline: none;
+      font-size: 12px;
+    }
+    .tool-btn {
+      height: 34px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: #202020;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .tool-btn:hover { color: var(--text); border-color: rgba(216,173,104,.58); }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr) 420px;
+      min-height: 0;
+    }
+
+    .left-panel, .detail-panel {
+      min-height: 0;
+      overflow: auto;
+      background: rgba(24,24,24,.96);
+    }
+    .left-panel { border-right: 1px solid var(--line); }
+    .detail-panel { border-left: 1px solid var(--line); }
+
+    .panel-block { padding: 14px; border-bottom: 1px solid var(--line); }
+    .panel-block h2 { margin: 0 0 9px; color: var(--gold); font-size: 13px; }
+    .panel-block p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+
+    .legend { display: grid; gap: 8px; }
+    .legend-item { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+    .dot { width: 10px; height: 10px; display: inline-block; background: var(--node); border: 1px solid #555; }
+    .dot.menu { background: #473a24; border-color: var(--gold); }
+    .dot.flow { background: #213a34; border-color: var(--green); }
+    .dot.model { background: #24304a; border-color: var(--blue); }
+    .dot.data { background: #30303d; border-color: #7777aa; }
+    .dot.risk { background: #422828; border-color: var(--red); }
+
+    .quick-list { display: grid; gap: 6px; }
+    .quick-link {
+      width: 100%;
+      min-height: 32px;
+      padding: 7px 9px;
+      border: 1px solid transparent;
+      color: var(--muted);
+      background: transparent;
+      text-align: left;
+      font-size: 12px;
+    }
+    .quick-link:hover { color: var(--text); border-color: var(--line); background: #202020; }
+
+    .canvas-wrap {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      overflow: auto;
+      background:
+        radial-gradient(circle at 48% 24%, rgba(216,173,104,.08), transparent 28%),
+        rgba(18,18,18,.96);
+    }
+
+    .canvas {
+      position: relative;
+      width: 2900px;
+      height: 1700px;
+      transform-origin: 0 0;
+      transition: transform .16s ease;
+    }
+    .links { position: absolute; inset: 0; width: 2900px; height: 1700px; pointer-events: none; overflow: visible; }
+    .link-path { fill: none; stroke: #4b4b4b; stroke-width: 1.3; }
+    .link-path.hot { stroke: rgba(216,173,104,.9); stroke-width: 1.9; }
+
+    .node-card {
+      position: absolute;
+      width: 165px;
+      min-height: 42px;
+      display: grid;
+      align-content: center;
+      padding: 8px 10px;
+      border: 1px solid #4a4a4a;
+      color: var(--text);
+      background: var(--node);
+      box-shadow: 0 8px 22px rgba(0,0,0,.22);
+      user-select: none;
+      transition: border-color .15s ease, background .15s ease, transform .15s ease, opacity .15s ease;
+    }
+    .node-card:hover { transform: translateY(-1px); border-color: rgba(216,173,104,.65); background: #3f3a32; }
+    .node-card.active { border-color: var(--gold); background: var(--node-active); box-shadow: 0 0 0 2px rgba(216,173,104,.13), 0 14px 28px rgba(0,0,0,.3); }
+    .node-card.match { border-color: var(--green); box-shadow: 0 0 0 2px rgba(114,201,170,.18); }
+    .node-card .name { display: block; overflow: hidden; color: var(--text); font-size: 11px; font-weight: 900; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+    .node-card .meta { display: block; margin-top: 3px; overflow: hidden; color: var(--muted); font-size: 10px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+    .node-card.type-root { width: 190px; background: #4a3720; border-color: var(--gold); }
+    .node-card.type-menu { background: #3b3328; border-color: #69583e; }
+    .node-card.type-flow { background: #263934; border-color: #466d60; }
+    .node-card.type-model { background: #293248; border-color: #485b86; }
+    .node-card.type-data { background: #30303d; border-color: #595977; }
+    .node-card.type-risk { background: #3e2828; border-color: #754545; }
+
+    .toggle {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      width: 18px;
+      height: 18px;
+      display: grid;
+      place-items: center;
+      border: 1px solid #5f5f5f;
+      color: var(--text);
+      background: #222;
+      font-size: 12px;
+      font-family: var(--mono);
+      line-height: 1;
+    }
+    .node-card.collapsed .toggle { color: #151515; background: var(--gold); border-color: var(--gold); }
+
+    .detail-head { padding: 16px; border-bottom: 1px solid var(--line); background: #1b1b1b; }
+    .detail-type { display: inline-flex; margin-bottom: 9px; padding: 3px 7px; color: var(--gold); border: 1px solid rgba(216,173,104,.42); background: rgba(216,173,104,.07); font-size: 11px; font-weight: 900; }
+    .detail-title { margin: 0; font-size: 20px; line-height: 1.28; }
+    .detail-summary { margin: 9px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .mini-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .mini-actions button { min-height: 30px; padding: 0 9px; color: var(--muted); border: 1px solid var(--line); background: #202020; font-size: 12px; font-weight: 800; }
+    .mini-actions button:hover { color: var(--text); border-color: var(--gold); }
+
+    .detail-body { padding: 16px; }
+    .info-grid { display: grid; gap: 10px; }
+    .info-card { padding: 12px; border: 1px solid var(--line); background: #202020; }
+    .info-card h3 { margin: 0 0 7px; color: var(--gold); font-size: 12px; }
+    .info-card ul, .info-card ol { margin: 0; padding-left: 18px; color: #d8d8d8; font-size: 12px; line-height: 1.62; }
+    .info-card li + li { margin-top: 4px; }
+    .detail-kv { display: grid; grid-template-columns: 92px minmax(0,1fr); gap: 8px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.06); color: #d8d8d8; font-size: 12px; line-height: 1.52; }
+    .detail-kv b { color: var(--gold); font-weight: 900; }
+    .code { margin: 0; padding: 11px; overflow: auto; color: #e6dfd0; border: 1px solid var(--line); background: #101010; font-family: var(--mono); font-size: 11px; line-height: 1.52; }
+    .empty { padding: 18px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+
+    @media (max-width: 1180px) {
+      body { overflow: auto; }
+      .app { height: auto; min-height: 100vh; }
+      .topbar { grid-template-columns: 1fr; }
+      .tools { justify-content: flex-start; flex-wrap: wrap; }
+      .workspace { grid-template-columns: 1fr; }
+      .left-panel, .detail-panel { max-height: none; border: 0; border-bottom: 1px solid var(--line); }
+      .canvas-wrap { height: 720px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">MAP</div>
+        <div>
+          <h1>AI 视频生产工具菜单架构图</h1>
+          <p>菜单树 · 工作台流程 · 创作规则 / 模型穿插 · 详细节点说明</p>
+        </div>
+      </div>
+      <div class="tabs" id="tabs"></div>
+      <div class="tools">
+        <input id="search" class="search" placeholder="搜索菜单 / 功能 / 数据" />
+        <button class="tool-btn" id="expandAll">全部展开</button>
+        <button class="tool-btn" id="collapseAll">收起细节</button>
+        <button class="tool-btn" id="zoomOut">-</button>
+        <button class="tool-btn" id="zoomReset">100%</button>
+        <button class="tool-btn" id="zoomIn">+</button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <aside class="left-panel">
+        <div class="panel-block">
+          <h2>使用方式</h2>
+          <p>先看“产品菜单”。点击任何节点，右侧会显示它能做什么、页面控件、操作步骤、读写数据、后端接口、创作规则和模型关系。</p>
+        </div>
+        <div class="panel-block">
+          <h2>节点类型</h2>
+          <div class="legend">
+            <div class="legend-item"><span class="dot menu"></span>菜单 / 页面</div>
+            <div class="legend-item"><span class="dot flow"></span>流程 / 工作台</div>
+            <div class="legend-item"><span class="dot model"></span>模型 / Workflow</div>
+            <div class="legend-item"><span class="dot data"></span>数据 / 服务</div>
+            <div class="legend-item"><span class="dot risk"></span>边界 / 风险</div>
+          </div>
+        </div>
+        <div class="panel-block">
+          <h2>快速定位</h2>
+          <div class="quick-list" id="quickList"></div>
+        </div>
+      </aside>
+
+      <main class="canvas-wrap" id="canvasWrap">
+        <div class="canvas" id="canvas">
+          <svg class="links" id="links"></svg>
+          <div id="nodes"></div>
+        </div>
+      </main>
+
+      <aside class="detail-panel" id="detailPanel">
+        <div class="empty">点击任意节点查看详情。</div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    // DATA_START
+    const views = {
+      menu: {
+        label: '产品菜单',
+        root: {
+          id: 'menu-root',
+          name: 'AI 视频生产工具',
+          meta: '用户看到的软件菜单',
+          type: 'root',
+          summary: '这张图先从用户能看到的菜单开始，而不是从技术模块开始。每个菜单节点都说明能做什么、页面控件、数据、接口，以及创作规则 / 模型 / 任务系统插在哪里。',
+          actions: ['创建和管理 AI 短视频作品', '管理视频包、创作规则、模型工作流和系统参数', '在作品工作台内完成内容创作、分镜、生图、视频、合成、导出', '在作品内查看进度、失败原因和历史记录'],
+          children: [
+            {
+              id: 'menu-home',
+              name: '我的作品',
+              meta: '默认入口 / 作品管理',
+              type: 'menu',
+              summary: '用户打开软件后的默认入口。这里是作品管理页：看作品、筛选作品、开始创作、打开作品、继续未完成作品。失败和导出只作为作品状态或作品卡片操作展示，不单独做一级入口。',
+              actions: ['查看作品列表', '按状态筛选作品', '搜索作品', '开始创作', '打开作品工作台', '继续生成中或失败的作品', '归档或删除作品'],
+              controls: ['作品搜索框', '状态筛选 Tabs', '排序选择器', '开始创作按钮', '作品卡片', '卡片更多操作菜单'],
+              outputs: ['作品列表（技术 ProjectList）', '作品状态汇总（技术 ProjectStatusSummary）'],
+              frontend: ['WorksHomePage / ProjectHomePage', 'WorksList / ProjectList', 'WorkCard / ProjectCard', 'ProjectFilterTabs'],
+              backend: ['list_projects', 'create_project', 'archive_project', 'delete_project', 'open_output_dir'],
+              data: ['Project.project_lifecycle', 'Project.updated_at', 'Task.task_status', 'TaskResult.final_video_path'],
+              children: [
+                {
+                  id: 'home-project-list',
+                  name: '作品列表',
+                  meta: '全部 / 草稿 / 生成中 / 已完成 / 失败',
+                  type: 'menu',
+                  summary: '首页主体就是作品列表。失败作品和已导出作品都只是列表里的状态，不是单独入口。',
+                  actions: ['查看全部作品', '查看草稿作品', '查看生成中作品', '查看已完成作品', '查看失败作品'],
+                  controls: ['状态 Tabs', '作品卡片', '空状态提示'],
+                  commands: ['list_projects'],
+                  data: ['Project', 'Task.task_status', 'Project.project_lifecycle'],
+                  notes: ['失败状态显示在作品卡片上，点击作品后进入对应步骤处理', '已完成作品在卡片上显示导出状态和打开目录操作']
+                },
+                {
+                  id: 'home-search-filter',
+                  name: '搜索 / 筛选 / 排序',
+                  meta: '作品管理能力',
+                  type: 'menu',
+                  summary: '作品多了以后必须能快速找到作品。它是首页的基础管理能力，不是单独业务模块。',
+                  actions: ['按标题搜索', '按状态筛选', '按更新时间排序', '按创建时间排序', '按视频包筛选'],
+                  controls: ['搜索框', '状态筛选 Tabs', '排序下拉', '内容类型筛选'],
+                  commands: ['list_projects'],
+                  fields: {
+                    keyword: '作品标题、视频想法或文案关键词',
+                    lifecycle: 'draft / running / completed / failed / archived',
+                    sortBy: 'updated_at / created_at / title',
+                    inputType: 'topic / paste / article / novel / material'
+                  }
+                },
+                {
+                  id: 'home-create',
+                  name: '开始创作',
+                  meta: '创建作品草稿并进入工作台',
+                  type: 'menu',
+                  summary: '用户点击“开始创作”后，系统创建一个作品草稿并直接进入作品工作台的“内容创作”步骤。用户不需要先理解或填写一个空项目壳。技术上仍创建 Project，但用户侧叫作品。',
+                  actions: ['点击开始创作', '创建作品草稿', '进入作品工作台', '在内容创作步骤填写视频想法或导入文案', '选择视频包和基础规格'],
+                  controls: ['开始创作按钮', '作品草稿创建中状态', '进入作品工作台'],
+                  steps: ['在我的作品点击开始创作', '系统创建 ProjectDraft 和默认 Bible', '进入作品工作台的内容创作步骤', '用户在内容创作里选择视频包、画幅、时长、分镜数，并输入或整理文案'],
+                  outputs: ['作品草稿（技术 Project）', '默认 Project Bible', 'ProductionPackBinding'],
+                  frontend: ['WorksHomePage', 'ProjectWorkspace', 'ContentCreationStep', 'PackSelector', 'WorkBasicSettings'],
+                  backend: ['create_project', 'list_production_packs', 'get_workflow_defaults'],
+                  data: ['Project.workflow_type', 'Project.lifecycle', 'ProductionPackBinding'],
+                  fields: {
+                    workTitle: '作品标题，先自动生成，用户后面可手动修改',
+                    workflowType: 'image_to_video 当前主线；后续 material_edit、digital_human、image_slideshow',
+                    packId: '在内容创作步骤选择视频包，不等于模型',
+                    aspectRatio: '在内容创作步骤设置，可后续修改',
+                    targetSceneCount: '在内容创作步骤设置，影响分镜规则',
+                    segmentDurationSeconds: '在内容创作步骤设置，每段默认视频时长'
+                  },
+                  children: [
+                    { id: 'create-draft', name: '作品草稿', meta: '自动创建', type: 'menu', summary: '点击开始创作后立即创建作品草稿。技术上是 Project，用户侧显示为作品。', data: ['Project.project_id', 'Project.lifecycle'] },
+                    { id: 'create-enter-workspace', name: '进入作品工作台', meta: '内容创作第一步', type: 'flow', summary: '创建草稿后直接进入作品工作台的内容创作步骤，不让用户停在空项目表单。', data: ['ProjectWorkspace', 'ContentCreationStep'] },
+                    { id: 'create-later-settings', name: '创作基础设置', meta: '在工作台内设置', type: 'flow', summary: '视频包、画幅、目标时长、分镜数放在内容创作步骤的侧栏里，可随着内容理解随时调整。', data: ['ProductionPackBinding', 'aspect_ratio', 'target_duration_seconds', 'target_scene_count'] }
+                  ]
+                },
+                {
+                  id: 'home-card-actions',
+                  name: '作品卡片操作',
+                  meta: '打开 / 继续 / 复制 / 归档',
+                  type: 'menu',
+                  summary: '首页里的操作应该围绕作品本身。失败、导出、继续生成都作为作品卡片上的动作出现。',
+                  actions: ['打开作品', '继续生成', '查看错误', '复制作品', '归档作品', '删除作品', '打开输出目录'],
+                  controls: ['打开按钮', '继续按钮', '更多菜单', '状态标签', '输出目录按钮'],
+                  commands: ['open_project', 'retry_task_step', 'duplicate_project', 'archive_project', 'delete_project', 'open_output_dir'],
+                  data: ['Project（作品）', 'Task', 'TaskStep', 'TaskResult'],
+                  notes: ['只有作品存在 final_video_path 时才显示打开输出目录', '只有失败作品才显示查看错误或继续重试'],
+                  children: [
+                    {
+                      id: 'project-workspace',
+                      name: '作品工作台',
+                      meta: '打开作品后的内部页面',
+                      type: 'flow',
+                      summary: '作品工作台不是一级菜单，只能从作品列表、作品卡片、开始创作或任务跳转进入。它是某个具体作品内部的完整生产页面。',
+                      actions: ['内容创作', '生成和编辑分镜', '维护设定集', '生成并选择图片', '规划视频模型输入', '生成并选择视频片段', '合成导出'],
+                      controls: ['StepBar', '左侧步骤导航', '主表格工作区', '右侧详情抽屉', '任务进度条', '重试按钮'],
+                      outputs: ['StoryboardItem[]', 'Bibles', 'ImageCandidate[]', 'VideoSegment[]', 'final.mp4'],
+                      frontend: ['ProjectWorkspace / WorkWorkspace', 'StepNavigator', 'TaskProgress', 'RightDetailDrawer'],
+                      backend: ['get_project_workspace', 'start_pipeline_step', 'retry_task_step'],
+                      data: ['Project', 'Storyboard', 'StoryboardItem', 'Task', 'TaskStep'],
+                      children: [
+                        {
+                          id: 'workspace-content',
+                          name: '内容创作',
+                          meta: '作品第一步',
+                          type: 'flow',
+                          summary: '内容创作是作品工作台的第一步，不是全局独立菜单。它负责从一句话视频想法生成文案、整理已有文案、提炼文章、改编小说剧情，并写入当前作品的 StoryboardItem 文本基础。',
+                          actions: ['输入一句话视频想法', '整理已有文案', '提炼文章重点', '改编小说剧情', '选择视频包', '设置画幅 / 时长 / 分镜数', '确认脚本草稿', '进入分镜'],
+                          controls: ['内容来源 Tabs', '文案编辑器', 'AI 生成按钮', '整理/改写按钮', '原文锁定开关', '版本对比', '视频包选择器', '基础规格设置', '进入分镜按钮'],
+                          skills: ['script.topic_narration', 'script.paste_cleanup', 'script.article_summary', 'novel.event_extract', 'review.script_safety'],
+                          outputs: ['ScriptDraft', 'CleanNarrationList', 'StoryboardItem.source_text / narration_text'],
+                          commands: ['generate_script_draft', 'cleanup_pasted_script', 'summarize_article_to_script', 'extract_novel_events', 'apply_script_to_current_work'],
+                          data: ['ScriptDraft', 'Project（作品）', 'StoryboardItem.source_text', 'StoryboardItem.narration_text', 'ProductionPackBinding', 'lock_flags_json'],
+                          children: [
+                            { id: 'content-topic', name: '一句话视频想法', meta: 'AI 生成文案', type: 'flow', summary: '用户只有一个视频想法时使用。这里不是填写“悬疑、科普”这种类型，而是写清楚视频要讲什么，例如“为什么孩子写作业拖拉，家长该怎么引导”。系统先生成脚本草稿，用户确认后进入分镜。', actions: ['输入一句话视频想法', '选择视频包决定讲法', '生成短视频脚本草稿', '编辑脚本', '进入分镜'], skills: ['script.topic_narration'], data: ['ScriptDraft'] },
+                            { id: 'content-paste', name: '已有文案', meta: '清洗 / 分段 / 锁定', type: 'flow', summary: '用户已有完整文案时使用。系统只做格式清洗、断句、分段和画面方向建议，不应擅自改写原文。', actions: ['粘贴文案', '清洗格式', '按句子或段落切分', '锁定原文', '进入分镜'], skills: ['script.paste_cleanup'], data: ['CleanNarrationList', 'lock_flags_json'] },
+                            { id: 'content-article', name: '文章 / 长文', meta: '提炼改写', type: 'flow', summary: '用户有长文或笔记时使用。系统提炼重点，改写为短视频脚本，再让用户确认。', actions: ['导入长文', '提炼重点', '生成短视频脚本', '进入分镜'], skills: ['script.article_summary'], data: ['source_text_path', 'ScriptDraft'] },
+                            { id: 'content-novel', name: '小说 / 剧情', meta: '事件提取', type: 'flow', summary: '用户有小说章节或剧情素材时使用。系统先提取事件、角色和场景，再改编成剧情脚本。', actions: ['导入章节', '提取事件', '抽取角色场景', '改编剧情脚本', '进入分镜'], skills: ['novel.event_extract', 'asset.character_extract', 'asset.environment_extract'], data: ['NovelChapter', 'structured_event', 'CharacterBibleDraft'] }
+                          ]
+                        },
+                        {
+                          id: 'workspace-overview',
+                          name: '作品概览',
+                          meta: '状态总览',
+                          type: 'flow',
+                          summary: '让用户知道当前作品做到哪一步，哪些内容已确认，哪些步骤缺东西。',
+                          actions: ['查看作品标题、画幅、时长、视频包', '查看分镜数量、生图进度、视频进度、合成状态', '从失败步骤继续'],
+                          data: ['Project', 'Task', 'TaskStep', 'ProgressEvent']
+                        },
+                        {
+                          id: 'workspace-storyboard',
+                          name: '分镜',
+                          meta: 'StoryboardItem 表格',
+                          type: 'flow',
+                          summary: '每一行就是一个镜头工作单元。用户能改原文片段、画面描述、角色、场景、时长、镜头语言。',
+                          actions: ['生成分镜', '编辑分镜行', '调整顺序', '锁定某行', '批量重生成未锁定字段'],
+                          controls: ['分镜表格', '当前分镜规则显示条', '行详情抽屉', '拖拽排序', '锁定按钮', '批量生成按钮'],
+                          skills: ['storyboard.children_education.v1', 'storyboard.knowledge.v1', 'storyboard.novel_scene.v1'],
+                          outputs: ['StoryboardItem[]'],
+                          data: ['StoryboardItem.item_index', 'source_text', 'visual_description', 'duration_seconds', 'shot_size', 'camera_motion', 'SkillSnapshot'],
+                          notes: ['页面只显示当前使用的创作规则名称和版本；编辑规则内容要跳转到“创作资源 > 创作规则”']
+                        },
+                        {
+                          id: 'workspace-bible',
+                          name: '设定集',
+                          meta: '画风 / 角色 / 场景 / 道具',
+                          type: 'flow',
+                          summary: '保证一致性的核心。StoryboardItem 只引用设定 ID，不复制整份设定。',
+                          actions: ['生成画风设定', '抽取角色', '抽取场景', '上传参考图', '确认或修改设定'],
+                          controls: ['Style 面板', '角色卡片', '场景列表', '当前设定集规则显示条', '参考图上传', '版本历史'],
+                          skills: ['asset.character_extract', 'asset.environment_extract', 'style.infer_from_reference'],
+                          models: ['VLM 参考图分析', 'LLM 结构化抽取'],
+                          data: ['StyleBible', 'CharacterBible', 'EnvironmentBible', 'PropBible', 'SkillSnapshot'],
+                          notes: ['角色图、场景图、风格图生成规则在“创作资源 > 创作规则 > 生图规则”里编辑；本页只选择和查看当前规则']
+                        },
+                        {
+                          id: 'workspace-image-prompt',
+                          name: '生图提示词',
+                          meta: '可查看可改',
+                          type: 'flow',
+                          summary: '生图提示词由 Bible + 分镜画面组合生成。用户必须能看到和修改，而不是黑盒。',
+                          actions: ['生成 imagePrompt', '编辑 prompt', '编辑 negativePrompt', '锁定提示词', '批量刷新未锁定行'],
+                          controls: ['Prompt 单元格', '当前生图提示词规则显示条', '负向词列', '锁定按钮', '批量应用风格'],
+                          skills: ['image_prompt.soft_cartoon.v1', 'image_prompt.cinematic.v1'],
+                          data: ['StoryboardItem.image_prompt', 'StoryboardItem.negative_prompt', 'SkillSnapshot'],
+                          notes: ['普通用户改当前分镜 prompt；编辑 Prompt 模板和规则去“创作资源 > 创作规则”']
+                        },
+                        {
+                          id: 'workspace-image',
+                          name: 'AI 生图',
+                          meta: '图片类型 + 生图工具 + 输入规划',
+                          type: 'model',
+                          summary: 'AI 生图不是只生成分镜候选图。它包含分镜图、角色参考图、场景参考图、风格参考图、道具图、尾帧图、控制图和封面图。不同生图工具需要的输入不同，前端应先调用“生图输入规划”接口，再渲染动态表单。',
+                          actions: ['选择图片类型', '选择生图工具或工作流', '查看当前工具需要哪些输入', '补齐 prompt / 参考图 / mask / pose / depth', '生成候选图', '选择最终图或保存为参考图'],
+                          controls: ['图片类型 Tabs', '当前图片类型规则显示条', '生图工具选择器', '生图缺项面板', '候选图网格', '参考图选择器', 'Mask 上传/绘制入口', '重生成按钮', '保存为角色/场景/风格参考按钮'],
+                          models: ['API 文生图', 'API 图生图', '多参考图模型', '局部重绘模型', '姿势/深度控制模型', 'ComfyUI 生图 Workflow'],
+                          commands: ['list_executable_media_options', 'get_image_input_plan', 'generate_images', 'select_image_candidate', 'save_asset_reference'],
+                          data: ['ImageInputPlan', 'ImageCandidate', 'AssetReference', 'StoryboardItem.selected_image_id', 'CharacterBible.reference_images_json', 'EnvironmentBible.reference_images_json', 'SkillSnapshot']
+                        },
+                        {
+                          id: 'workspace-video',
+                          name: 'AI 视频',
+                          meta: '动态输入规划',
+                          type: 'model',
+                          summary: 'AI 视频前必须调用“视频输入规划”接口。不同视频模型需要的图和参数不同，前端不要写死。',
+                          actions: ['选择视频模型或工作流', '查看每个镜头缺什么', '补齐首帧/尾帧/参考图/pose/depth/mask', '生成视频片段', '选择最终片段'],
+                          controls: ['视频模型选择器', '当前视频规则显示条', '输入计划面板', '缺项补齐按钮', '片段预览列表', '重试按钮'],
+                          models: ['普通图生视频', '首尾帧视频', '参考图视频', 'ComfyUI Workflow', 'RunningHub Workflow'],
+                          commands: ['get_model_input_plan', 'generate_video_segments', 'select_video_segment'],
+                          data: ['VideoInputPlan', 'VideoSegment', 'StoryboardItem.selected_video_segment_id', 'SkillSnapshot']
+                        },
+                        {
+                          id: 'workspace-compose',
+                          name: '合成',
+                          meta: 'FFmpeg',
+                          type: 'data',
+                          summary: '按分镜顺序读取 selectedVideoSegmentId，拼接为 final.mp4。后续可加入 BGM、字幕、封面。',
+                          actions: ['检查所有分镜是否有已选视频', '拼接片段', '转码输出', '生成导出记录'],
+                          controls: ['合成按钮', '进度条', '错误日志', '打开输出目录'],
+                          backend: ['FFmpegService', 'CompositionService'],
+                          data: ['CompositionTask', 'TaskResult.final_video_path']
+                        },
+                        {
+                          id: 'workspace-export',
+                          name: '导出 / 历史',
+                          meta: '输出收口',
+                          type: 'menu',
+                          summary: '导出最终视频和作品包，历史可回看，诊断包不泄露密钥和绝对路径。',
+                          actions: ['导出 final.mp4', '打开输出目录', '导出作品包', '生成诊断包', '回看历史任务'],
+                          data: ['ExportPackage', 'History', 'DiagnosticPackage'],
+                          notes: ['导出包不得包含 API Key', '路径应使用相对路径或脱敏路径']
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              id: 'menu-creative-resources',
+              name: '创作资源',
+              meta: '视频包 / 创作规则 / 素材库',
+              type: 'menu',
+              summary: '创作资源是作品之外可复用、可配置、可组合的创作能力集合。视频包负责内容策略组合，创作规则负责可编辑生成规则，素材库负责可复用角色、场景、风格、道具和音频素材。',
+              actions: ['管理视频包', '管理创作规则', '管理可复用素材', '查看视频包引用了哪些规则', '查看素材被哪些作品引用'],
+              controls: ['资源类型导航', '视频包列表', '创作规则列表', '素材分类', '引用关系面板'],
+              data: ['ProductionPack', 'SkillDefinition', 'SkillBinding', 'Asset', 'AssetReference'],
+              children: [
+                {
+                  id: 'menu-pack',
+                  name: '视频包',
+                  meta: '内容策略包',
+                  type: 'menu',
+                  summary: '视频包是内容策略层，决定语气、结构、默认创作规则、审核规则和推荐模型，但不等于模型，也不直接编辑规则内容。规则的集中编辑在“创作规则”菜单。',
+                  actions: ['查看内置包', '复制为用户包', '编辑包说明', '绑定创作规则', '查看当前包引用了哪些规则', '设置推荐模型', '管理版本'],
+                  controls: ['包列表', '基本信息表单', '规则绑定表', '规则摘要', '版本历史', '启用开关'],
+                  data: ['ProductionPack', 'SkillBinding', 'PackRule', 'PackVersion'],
+                  backend: ['PackService', 'SkillRegistry'],
+                  children: [
+                    { id: 'pack-children', name: '儿童教育包', meta: '安全正向', type: 'menu', summary: '温和、正向、清楚，禁止恐吓、羞辱、暴力惩罚。', skills: ['storyboard.children_education', 'review.children_safety'] },
+                    { id: 'pack-knowledge', name: '知识科普包', meta: '概念解释', type: 'menu', summary: '问题、概念、例子、类比、结论，适合符号化和信息可视化镜头。', skills: ['storyboard.knowledge', 'image_prompt.infographic'] },
+                    { id: 'pack-novel', name: '小说剧情包', meta: '人物冲突', type: 'menu', summary: '角色、目标、冲突、转折、悬念，重视角色一致性和场景连续性。', skills: ['storyboard.novel_scene', 'asset.character_extract'] },
+                    { id: 'pack-product', name: '产品广告包', meta: '卖点转化', type: 'menu', summary: '痛点、卖点、使用场景、证明、行动号召。', skills: ['storyboard.product_ad', 'review.brand_safety'] },
+                    { id: 'pack-custom', name: '用户自定义包', meta: '复制编辑', type: 'menu', summary: '内置包不直接修改，用户编辑时复制成自定义包，避免升级冲突。', notes: ['用户包只影响新任务', '历史任务读取 packSnapshot'] }
+                  ]
+                },
+                {
+                  id: 'menu-skill',
+                  name: '创作规则',
+                  meta: '规则集中管理',
+                  type: 'menu',
+                  summary: '所有可编辑创作规则集中放在这里。技术实现上可叫 Skill，但用户界面统一显示“创作规则”。视频包只引用规则；作品工作台只显示当前步骤正在使用的规则名称和版本。这样能避免规则散落在包、分镜、生图页面里。',
+                  actions: ['查看全部规则', '按类型筛选规则', '复制内置规则为用户版本', '编辑 Prompt / 规则参数', '编辑输入 Schema 和输出 Schema', '运行测试样例', '发布新版本', '回滚版本', '查看哪些视频包正在引用该规则'],
+                  controls: ['规则类型侧边栏', '规则列表', '版本选择器', 'Prompt 编辑器', '规则参数表单', 'Schema 编辑器', '测试输入区', '结构化输出预览', '引用关系面板'],
+                  frontend: ['SkillManagerPage', 'SkillEditor', 'SchemaEditor', 'SkillTestRunner', 'SkillReferencePanel'],
+                  backend: ['SkillRegistry', 'PromptSkillService', 'validate_skill_schema', 'test_skill', 'publish_skill_version'],
+                  data: ['SkillDefinition', 'SkillVersion', 'SkillBinding', 'SkillTestCase', 'SkillSnapshot'],
+                  notes: ['内置规则不直接修改，编辑时复制为用户规则', '历史任务读取 SkillSnapshot，不受新版本影响', '创作规则只能生成结构化建议，不能直接写库或调用 Provider'],
+                  children: [
+                    {
+                      id: 'skill-script',
+                      name: '文案规则',
+                      meta: '内容创作',
+                      type: 'flow',
+                      summary: '显示和编辑一句话选题生成文案、已有文案清洗分段、文章提炼、小说事件提取等规则。',
+                      actions: ['编辑文案生成 Prompt', '编辑清洗分段规则', '编辑文章提炼规则', '编辑小说事件提取规则', '测试输入输出'],
+                      data: ['ScriptDraft', 'CleanNarrationList', 'NovelChapter.structured_event'],
+                      skills: ['script.topic_narration', 'script.paste_cleanup', 'script.article_summary', 'novel.event_extract']
+                    },
+                    {
+                      id: 'skill-storyboard',
+                      name: '分镜规则',
+                      meta: '分镜规则',
+                      type: 'flow',
+                      summary: '显示和编辑分镜拆分、镜头节奏、画面描述、角色/场景引用、时长分配等规则。不同视频包可以引用不同分镜规则。',
+                      actions: ['编辑分镜结构', '编辑镜头角色规则', '编辑时长分配规则', '编辑字段输出 Schema', '测试生成 StoryboardItem'],
+                      data: ['StoryboardItem', 'shot_size', 'camera_motion', 'duration_seconds'],
+                      skills: ['storyboard.children_education', 'storyboard.knowledge', 'storyboard.novel_scene', 'storyboard.product_ad']
+                    },
+                    {
+                      id: 'skill-bible',
+                      name: '设定集规则',
+                      meta: '角色 / 场景 / 风格 / 道具',
+                      type: 'flow',
+                      summary: '显示和编辑角色抽取、场景抽取、道具抽取、画风推导规则。它们生成设定草稿，用户确认后才进入当前作品。',
+                      actions: ['编辑角色抽取规则', '编辑场景抽取规则', '编辑道具抽取规则', '编辑画风推导规则', '测试 Bible 草稿输出'],
+                      data: ['StyleBible', 'CharacterBible', 'EnvironmentBible', 'PropBible'],
+                      skills: ['asset.character_extract', 'asset.environment_extract', 'asset.prop_extract', 'style.infer_from_reference']
+                    },
+                    {
+                      id: 'skill-image',
+                      name: '生图规则',
+                      meta: '分镜图 / 角色图 / 场景图',
+                      type: 'model',
+                      summary: '显示和编辑不同图片类型的提示词规则。分镜图、角色参考图、场景参考图、风格参考图、道具图、尾帧图、控制图不应该共用一套提示词。',
+                      actions: ['编辑分镜图提示词规则', '编辑角色图提示词规则', '编辑场景图提示词规则', '编辑风格图提示词规则', '编辑尾帧图提示词规则', '编辑控制图生成规则'],
+                      data: ['ImagePromptList', 'ImageInputPlan', 'ImageCandidate', 'AssetReference'],
+                      skills: ['image_prompt.shot_frame', 'image_prompt.character_reference', 'image_prompt.scene_reference', 'image_prompt.style_reference', 'image_prompt.end_frame', 'image_prompt.control_image']
+                    },
+                    {
+                      id: 'skill-video',
+                      name: '视频规则',
+                      meta: '视频提示词 / 动作描述',
+                      type: 'model',
+                      summary: '显示和编辑普通图生视频、首尾帧视频、参考图视频、ComfyUI 工作流视频的动作描述和视频提示词规则。',
+                      actions: ['编辑视频动作描述规则', '编辑首尾帧运动目标规则', '编辑参考图视频提示词规则', '编辑镜头运动词库', '测试 VideoPromptList 输出'],
+                      data: ['VideoPromptList', 'VideoInputPlan', 'VideoSegment'],
+                      skills: ['video_prompt.i2v', 'video_prompt.start_end_frame', 'video_prompt.reference_video', 'video_prompt.safe_motion']
+                    },
+                    {
+                      id: 'skill-review',
+                      name: '审核 / 安全规则',
+                      meta: '审核规则',
+                      type: 'risk',
+                      summary: '显示和编辑儿童内容安全、品牌安全、平台敏感表达中性化、缺项检查和质量检查规则。',
+                      actions: ['编辑安全审核规则', '编辑品牌约束', '编辑中性化规则', '编辑缺项检查', '测试 ReviewReport'],
+                      data: ['ReviewReport', 'ProviderError', 'TaskStep.error_json'],
+                      skills: ['review.children_safety', 'review.brand_safety', 'review.prompt_neutralize', 'review.missing_requirements']
+                    }
+                  ]
+                },
+                {
+                  id: 'menu-assets',
+                  name: '素材库',
+                  meta: '可复用创作资产',
+                  type: 'menu',
+                  summary: '素材库只放可复用创作资产，不默认收纳作品产物。分镜候选图、视频片段、final.mp4 默认属于作品文件夹；只有用户主动“保存为素材 / 保存为角色参考 / 保存为场景参考 / 保存为风格参考”时，才进入素材库。',
+                  actions: ['管理可复用角色', '管理可复用场景', '管理风格参考', '管理道具/产品素材', '管理音频素材', '管理用户上传素材', '查看素材被哪些作品引用'],
+                  controls: ['素材分类导航', '素材卡片', '标签筛选', '引用作品面板', '保存为参考图按钮', '删除/归档按钮'],
+                  data: ['Asset', 'AssetReference', 'CharacterBible.reference_images_json', 'EnvironmentBible.reference_images_json', 'StyleBible.reference_image_path'],
+                  backend: ['AssetService', 'StorageService'],
+                  notes: ['素材库不是生成页面，也不是作品产物列表', '作品产物默认放在作品文件夹', '删除素材前必须检查引用关系', '远程 URL 必须转存本地，数据库只存相对路径'],
+                  children: [
+                    { id: 'asset-character', name: '角色', meta: '角色设定 + 参考图', type: 'menu', summary: '可复用角色素材。包含角色名称、外观描述、服装、表情、三视图和参考图。提示词作为高级元数据保存，不在普通列表里直接展示。', actions: ['查看角色卡片', '上传角色参考图', '保存 AI 生成图为角色参考', '查看引用作品'], data: ['CharacterBible', 'reference_images_json', 'visualPrompt'] },
+                    { id: 'asset-scene', name: '场景', meta: '地点 / 布局 / 参考图', type: 'menu', summary: '可复用场景素材。包含场景名称、空间布局、光照、道具、全景图、局部细节和日夜变体。', actions: ['查看场景卡片', '上传场景参考图', '保存为场景参考', '查看引用作品'], data: ['EnvironmentBible', 'reference_images_json'] },
+                    { id: 'asset-style', name: '风格', meta: '画风参考', type: 'menu', summary: '可复用风格素材。包含色彩、线条、材质、光照、构图和风格参考图。', actions: ['查看风格卡片', '上传风格参考图', '保存 AI 图为风格参考', '绑定适用视频包'], data: ['StyleBible', 'style_prompt', 'reference_image_path'] },
+                    { id: 'asset-prop', name: '道具 / 产品', meta: '物件素材', type: 'menu', summary: '可复用物件素材。适合产品图、Logo、包装、书本、玩具、标志性道具等。', actions: ['上传产品图', '标记 Logo / 包装 / 道具', '查看使用限制', '查看引用作品'], data: ['PropBible', 'AssetReference'] },
+                    { id: 'asset-audio', name: '音频', meta: 'BGM / 音效 / 旁白样本', type: 'menu', summary: '可复用音频资产。包含 BGM、音效、旁白样本、品牌声音等。TTS 生成的作品音频默认仍放作品文件夹，用户保存为素材后才进入这里。', actions: ['上传 BGM', '上传音效', '保存旁白样本', '查看授权信息'], data: ['AudioAsset', 'AssetReference'] },
+                    { id: 'asset-upload', name: '上传素材', meta: '用户导入', type: 'menu', summary: '用户主动上传并希望复用的图片、视频、音频等。普通作品生成产物不会自动进入这里。', actions: ['上传图片', '上传视频', '上传音频', '打标签', '保存到分类'], data: ['Asset'] }
+                  ]
+                },
+              ]
+            },
+            {
+              id: 'menu-model-workflow',
+              name: '模型 / 工作流',
+              meta: 'Provider / 能力矩阵 / ComfyUI',
+              type: 'model',
+              summary: '这是生成能力配置中心，不属于普通系统设置。它决定前端在生图、视频、TTS、VLM 等步骤能选择哪些模型或工作流，以及每个模型到底需要哪些输入。',
+              actions: ['配置 Provider 连接', '登记 API 模型能力', '管理 ComfyUI / RunningHub 工作流', '测试模型和工作流', '给视频包设置推荐模型'],
+              controls: ['Provider 列表', '模型能力矩阵', 'Workflow Preset 表', '连接测试按钮', '能力测试按钮', '输入 Schema 预览'],
+              backend: ['ProviderService', 'WorkflowRegistry', 'ModelAbilityService', 'KeyringService'],
+              data: ['ProviderConfig', 'ProviderModel', 'ProviderModelAbilityDto', 'WorkflowPreset'],
+              children: [
+                {
+                  id: 'model-provider',
+                  name: 'Provider 连接',
+                  meta: 'API / 本地服务',
+                  type: 'model',
+                  summary: '配置 OpenAI、DashScope、Kling、RunningHub、本地 ComfyUI 等连接。真实 API Key 只进入 keyring。',
+                  actions: ['新增 Provider', '填写 baseUrl', '保存 key_alias', '测试连接', '启用或禁用 Provider'],
+                  fields: { providerKind: 'llm / image / video / tts / vlm / workflow', vendor: 'openai / dashscope / kling / comfyui / runninghub', keyAlias: '系统 keyring 中的密钥别名', baseUrl: '供应商 API 地址或本地 ComfyUI 地址' },
+                  commands: ['list_providers', 'save_provider_config', 'test_provider_connection'],
+                  notes: ['禁止把 api_key 写入 SQLite、JSON、日志、导出包']
+                },
+                {
+                  id: 'model-api-ability',
+                  name: 'API 模型能力',
+                  meta: '动态输入来源',
+                  type: 'model',
+                  summary: 'API 模型必须登记能力矩阵，说明支持什么输入输出、时长、比例、参考图数量。“生图输入规划”和“视频输入规划”依赖这里生成动态表单。',
+                  actions: ['新增模型', '编辑能力类型', '设置输入/输出模态', '设置时长和分辨率限制', '设置参考图数量限制', '测试模型'],
+                  fields: { abilityTypes: 'text_to_image / image_to_video / start_end_frame_i2v / reference_i2v / tts / vlm 等', inputModalities: 'text / image / audio / video / mask / pose / depth', outputModalities: 'image / video / audio / text', limits: 'duration、fps、aspectRatio、maxReferenceImages、maxPromptLength' },
+                  data: ['ProviderModelAbilityDto'],
+                  commands: ['list_provider_models', 'save_provider_model', 'test_provider_model']
+                },
+                {
+                  id: 'model-workflow-preset',
+                  name: 'ComfyUI / RunningHub',
+                  meta: 'Workflow Preset',
+                  type: 'model',
+                  summary: 'ComfyUI 和 RunningHub 通过 WorkflowPreset 接入，不让业务页面直接编辑任意 workflow JSON。Preset 必须声明 paramSchema、nodeMap、outputMap 和需要的输入图类型。',
+                  actions: ['扫描内置 workflow', '导入 preset', '校验 paramSchema', '校验 nodeMap', '校验 outputMap', '声明输入图要求', '测试工作流'],
+                  fields: { workflowPresetId: '系统内部 ID', workflowKey: '本地 workflow_api.json 或 RunningHub key', workflowId: 'RunningHub 云端 workflow_id', paramSchema: '对外暴露参数', nodeMap: '参数到节点字段映射', outputMap: '输出节点映射', requiredAssets: 'startFrame / endFrame / mask / pose / depth / referenceImages' },
+                  commands: ['scan_builtin_workflow_presets', 'list_workflow_presets', 'save_workflow_preset', 'test_workflow_preset']
+                }
+              ]
+            },
+            {
+              id: 'menu-settings',
+              name: '系统设置',
+              meta: '路径 / 安全 / 诊断 / 默认值',
+              type: 'menu',
+              summary: '系统设置只放全局运行参数和安全诊断，不放具体模型能力。模型、Provider、ComfyUI 和 RunningHub 放在“模型 / 工作流”。',
+              actions: ['设置默认生成参数', '设置文件路径', '检测 FFmpeg / Chromium', '配置全局安全开关', '查看日志诊断'],
+              controls: ['设置侧边导航', '路径选择器', 'Sidecar 自检', '全局安全开关', '日志导出按钮'],
+              backend: ['ConfigService', 'KeyringService', 'PathGuard', 'DiagnosticService'],
+              data: ['AppConfig', 'DiagnosticPackage'],
+              children: [
+                {
+                  id: 'settings-defaults',
+                  name: '默认生成参数',
+                  meta: '全局默认值',
+                  type: 'menu',
+                  summary: '设置默认画幅、分镜数量、候选图数量、单段时长、重试次数。项目和视频包可以覆盖这些默认值。',
+                  fields: { aspectRatio: '默认 vertical_9_16', imageCandidateCount: '每个分镜默认候选图数量', segmentDurationSeconds: '默认单段视频时长', retryPolicy: '失败重试次数和间隔' },
+                  data: ['AppConfig', 'PipelineConfigSnapshot']
+                },
+                {
+                  id: 'settings-path',
+                  name: '文件路径',
+                  meta: '工作区和缓存',
+                  type: 'data',
+                  summary: '配置工作区、缓存、导出目录。所有路径必须经过 PathGuard 校验。',
+                  actions: ['选择工作区目录', '选择导出目录', '清理缓存', '打开日志目录'],
+                  fields: { workspaceRoot: '作品文件和媒体产物根目录', exportDir: '默认导出目录', cacheDir: '临时缓存目录' },
+                  backend: ['StorageService', 'PathGuard']
+                },
+                {
+                  id: 'settings-sidecar',
+                  name: 'Sidecar 检测',
+                  meta: 'FFmpeg / Chromium',
+                  type: 'data',
+                  summary: '检测 FFmpeg、FFprobe、Chromium 是否存在、是否可执行、版本是否可读取。',
+                  actions: ['检测 FFmpeg', '检测 FFprobe', '检测 Chromium', '查看版本', '显示修复建议'],
+                  backend: ['FFmpegService.self_check', 'TemplateRenderer.self_check']
+                },
+                {
+                  id: 'settings-safety',
+                  name: '安全与权限',
+                  meta: '密钥 / 脱敏 / 全局开关',
+                  type: 'risk',
+                  summary: '这里管理密钥保护、诊断包脱敏、敏感操作记录和全局安全开关。具体内容审核 Prompt 和规则在“创作资源 > 创作规则 > 审核 / 安全规则”里编辑。',
+                  actions: ['查看密钥保存状态', '开启诊断包脱敏', '查看敏感操作记录', '设置全局内容审核开关'],
+                  notes: ['不在这里编辑审核 Prompt', '诊断包不得泄露密钥', '导出包不得包含绝对路径和 API Key']
+                },
+                {
+                  id: 'settings-diagnostics',
+                  name: '日志与诊断',
+                  meta: '排错',
+                  type: 'data',
+                  summary: '查看运行日志、模型服务错误、任务错误、导出诊断包。',
+                  actions: ['查看日志', '过滤错误码', '导出诊断包', '复制任务 ID'],
+                  data: ['AppLog', 'ProviderError', 'TaskStep.error_json', 'DiagnosticPackage']
+                }
+              ]
+            }
+          ]
+        }
+      },
+      flow: {
+        label: '作品流程',
+        root: {
+          id: 'flow-root',
+          name: '作品工作台完整流程',
+          meta: '开始创作后的每一步',
+          type: 'root',
+          summary: '这张图只看一个作品从开始创作到导出的完整步骤。每一步都说明用户做什么、AI 做什么、读写什么数据。技术上仍使用 Project 作为作品容器。',
+          children: [
+            { id: 'flow-01', name: '01 内容创作', meta: '作品第一步', type: 'flow', summary: '输入一句话视频想法、已有文案、文章或小说剧情，生成当前作品的脚本草稿，并选择视频包和基础规格。', actions: ['输入或导入内容', '生成/整理文案', '选择视频包', '设置画幅、时长、分镜数', '确认脚本草稿'], skills: ['script.*'], data: ['ScriptDraft', 'StoryboardItem.source_text', 'StoryboardItem.narration_text', 'ProductionPackBinding'] },
+            { id: 'flow-02', name: '02 作品概览', meta: '状态总览', type: 'flow', summary: '显示作品基本信息、视频包、当前步骤、失败任务和产物状态。', actions: ['查看当前进度', '跳转到未完成步骤', '继续失败任务'], data: ['Project', 'Task', 'TaskStep'] },
+            { id: 'flow-03', name: '03 分镜', meta: 'StoryboardItem', type: 'flow', summary: '根据视频包绑定的分镜规则生成可编辑分镜表。', actions: ['生成分镜', '编辑画面描述', '调整顺序', '锁定行'], skills: ['storyboard.*'], data: ['StoryboardItem'] },
+            { id: 'flow-04', name: '04 设定集', meta: 'Bibles', type: 'flow', summary: '抽取并确认画风、角色、场景、道具。它们是全片一致性的来源。', actions: ['生成画风', '抽取角色', '抽取场景', '上传参考图'], skills: ['asset.character.*', 'asset.environment.*'], data: ['StyleBible', 'CharacterBible', 'EnvironmentBible'] },
+            { id: 'flow-05', name: '05 生图提示词', meta: 'Prompt', type: 'flow', summary: '把 Bible 和分镜画面描述组合成 imagePrompt，用户可看可改。', actions: ['生成提示词', '编辑提示词', '锁定提示词', '批量刷新'], skills: ['image_prompt.*'], data: ['image_prompt', 'negative_prompt'] },
+            { id: 'flow-06', name: '06 AI 生图', meta: '图片类型 + 生图输入规划', type: 'model', summary: '先确定要生成哪类图片：分镜图、角色参考图、场景参考图、风格参考图、道具图、尾帧图、控制图或封面图；再根据生图工具能力返回动态输入计划。', actions: ['选择图片类型', '选择生图工具', '查看生图缺项', '补齐参考图 / mask / pose / depth', '生成候选图', '保存为分镜图或参考图'], models: ['API 文生图', 'API 图生图', '多参考图模型', '局部重绘模型', 'ComfyUI Image Workflow'], data: ['ImageInputPlan', 'ImageCandidate', 'AssetReference'] },
+            { id: 'flow-07', name: '07 视频输入规划', meta: '视频模型输入要求', type: 'data', summary: '视频生成前先判断当前视频模型需要什么输入，例如首帧、尾帧、参考图、pose、depth、mask 或 workflow 参数。', actions: ['选择视频模型', '查看缺项', '补首帧/尾帧/参考图/pose/depth/mask'], models: ['Video API', 'WorkflowPreset'], data: ['VideoInputPlan'] },
+            { id: 'flow-08', name: '08 AI 视频', meta: 'VideoSegment', type: 'model', summary: '按输入计划调用视频 API 或工作流，生成片段，用户选择最终片段。', actions: ['生成视频', '预览片段', '选择片段', '失败重试'], data: ['VideoSegment'] },
+            { id: 'flow-09', name: '09 合成', meta: 'FFmpeg', type: 'data', summary: '按 StoryboardItem.itemIndex 顺序拼接 selectedVideoSegment。', actions: ['检查缺失片段', '合成 final.mp4', '查看日志'], backend: ['FFmpegService'], data: ['CompositionTask'] },
+            { id: 'flow-10', name: '10 导出 / 历史', meta: 'Export', type: 'menu', summary: '输出 final.mp4，记录历史，支持打开目录和导出作品包。', actions: ['打开输出目录', '导出作品包', '查看历史'], data: ['ExportPackage', 'History'] }
+          ]
+        }
+      },
+      cross: {
+        label: '穿插能力',
+        root: {
+          id: 'cross-root',
+          name: '创作规则 / 包 / 模型穿插关系',
+          meta: '哪些能力插在哪一步',
+          type: 'root',
+          summary: '视频包、创作规则、生图输入规划、视频输入规划、Provider、任务系统不是一个菜单流程，而是穿插在工作台步骤里的能力层。',
+          children: [
+            {
+              id: 'cross-pack',
+              name: '视频包',
+              meta: '影响多个步骤',
+              type: 'menu',
+              summary: '视频包影响脚本、分镜、角色、场景、提示词和审核，但不直接调用模型。',
+              actions: ['提供语气规则', '提供结构规则', '绑定默认创作规则', '提供审核策略', '提供模型推荐'],
+              data: ['ProductionPack', 'PackSnapshot'],
+              children: [
+                { id: 'cross-pack-script', name: '影响脚本', meta: 'tone / structure', type: 'flow', summary: '决定脚本语气和结构，例如儿童教育强调温和正向。' },
+                { id: 'cross-pack-story', name: '影响分镜', meta: 'storyboard skill', type: 'flow', summary: '决定使用哪套分镜规则，例如小说剧情和科普不同。' },
+                { id: 'cross-pack-review', name: '影响审核', meta: 'review rule', type: 'risk', summary: '儿童教育、广告、品牌内容有不同审核规则。' }
+              ]
+            },
+            {
+              id: 'cross-skill',
+              name: '创作规则',
+              meta: '结构化生成',
+              type: 'flow',
+              summary: '创作规则必须版本化、schema 校验、任务快照。技术实现可以保留 SkillDefinition / SkillSnapshot，但用户侧统一叫创作规则。它有两个显示位置：集中编辑在“创作资源 > 创作规则”；在分镜、生图、视频等工作台步骤中只显示当前使用的规则名称、版本和跳转入口。',
+              actions: ['集中编辑创作规则', '在工作台步骤显示当前规则', '生成脚本', '生成分镜', '抽取角色', '抽取场景', '生成生图词', '生成视频词', '生成审核报告'],
+              data: ['SkillSnapshot', 'OutputSchema'],
+              children: [
+                { id: 'cross-skill-center', name: '集中编辑', meta: '创作规则菜单', type: 'menu', summary: '所有规则的列表、编辑、测试、版本、引用关系都在这里集中管理。' },
+                { id: 'cross-skill-inline', name: '步骤内显示', meta: '当前规则显示条', type: 'flow', summary: '分镜、生图、AI 视频等页面显示当前使用的规则名称和版本，并提供跳转到编辑页的入口。' },
+                { id: 'cross-skill-story', name: '分镜规则', meta: 'storyboard.*', type: 'flow', summary: '不同视频包可以用不同分镜规则。' },
+                { id: 'cross-skill-asset', name: '设定集规则', meta: 'character / scene / style', type: 'flow', summary: '角色、场景、道具、画风抽取进入 Bible 草稿。' },
+                { id: 'cross-skill-prompt', name: '提示词规则', meta: 'image / video', type: 'flow', summary: '根据 Bible 和分镜生成图片/视频提示词。' }
+              ]
+            },
+            {
+              id: 'cross-image-planner',
+              name: '生图输入规划',
+              meta: 'AI 生图前',
+              type: 'data',
+              summary: '生图也需要输入规划。不同图片类型和不同生图工具需要的输入不一样，前端不能固定写死 prompt + 画幅。',
+              actions: ['判断要生成的图片类型', '读取生图工具能力', '读取设定集和素材库', '判断需要 prompt / reference / mask / pose / depth', '返回前端动态表单和缺项状态'],
+              outputs: ['ImageInputPlan（技术 DTO）'],
+              data: ['StoryboardItem', 'StyleBible', 'CharacterBible', 'EnvironmentBible', 'AssetReference', 'WorkflowPreset'],
+              children: [
+                { id: 'image-plan-t2i', name: 'API 文生图', meta: 'prompt + 画幅', type: 'model', summary: '通常需要 prompt、negativePrompt、aspectRatio、size、seed。适合分镜图、风格图、场景草图。' },
+                { id: 'image-plan-i2i', name: 'API 图生图', meta: 'inputImage + prompt', type: 'model', summary: '需要输入图和 prompt。适合图像变体、风格迁移、尾帧图。' },
+                { id: 'image-plan-ref', name: '多参考图模型', meta: 'referenceImages', type: 'model', summary: '需要角色、风格、场景等参考图，并受 maxReferenceImages 限制。' },
+                { id: 'image-plan-inpaint', name: '局部重绘', meta: 'image + mask', type: 'model', summary: '需要原图、mask 和 prompt。适合修脸、换道具、改局部画面。' },
+                { id: 'image-plan-control', name: '控制图工作流', meta: 'pose / depth / lineart', type: 'model', summary: '需要姿势图、深度图、线稿图或分割图，常见于 ComfyUI / ControlNet。' },
+                { id: 'image-plan-comfy', name: 'ComfyUI 生图', meta: 'workflow preset', type: 'model', summary: '需要 workflowPresetId、paramSchema、nodeMap、outputMap，以及 preset 声明的输入图和参数。' }
+              ]
+            },
+            {
+              id: 'cross-planner',
+              name: '视频输入规划',
+              meta: 'AI 视频前',
+              type: 'data',
+              summary: '视频生成前的输入规划器。它告诉前端当前视频模型到底需要哪些输入，哪些缺失，哪些不需要。',
+              actions: ['合并模型能力', '读取作品素材', '读取设定集', '读取锁定状态', '返回 requirements'],
+              outputs: ['VideoInputPlan（技术 DTO）'],
+              data: ['StoryboardItem', 'ImageCandidate', 'CharacterBible', 'WorkflowPreset'],
+              children: [
+                { id: 'planner-start', name: '首帧图', meta: 'startFrame', type: 'model', summary: '普通图生视频必需，通常来自 selectedImageId。' },
+                { id: 'planner-end', name: '尾帧图', meta: 'endFrame', type: 'model', summary: '首尾帧模型必需，可以生成、上传或选择资产。' },
+                { id: 'planner-ref', name: '参考图', meta: 'character / style', type: 'model', summary: '参考图模型需要，来自 Bible 的 referenceImages。' },
+                { id: 'planner-workflow', name: '工作流参数', meta: 'frames / fps / mask', type: 'model', summary: 'ComfyUI / RunningHub 按 paramSchema 暴露参数。' }
+              ]
+            },
+            {
+              id: 'cross-task',
+              name: '任务系统',
+              meta: '贯穿全局',
+              type: 'data',
+              summary: '所有生成步骤都通过 Task / TaskStep 记录进度、错误、输入输出和快照。',
+              actions: ['创建任务', '推进步骤', '记录进度', '失败重试', '断点续跑', '保存快照'],
+              data: ['Task', 'TaskStep', 'TaskSnapshot']
+            }
+          ]
+        }
+      },
+      data: {
+        label: '数据支撑',
+        root: {
+          id: 'data-root',
+          name: '数据结构与后端支撑',
+          meta: 'Project -> Artifact -> Task',
+          type: 'root',
+          summary: '这一张图给开发看，说明菜单和流程背后的数据怎么流动。',
+          children: [
+            { id: 'data-project', name: 'Project', meta: '作品容器（技术名 Project）', type: 'data', summary: '用户侧一次创作叫一个作品，技术侧落库为 Project。记录 workflowType、inputType、sourceText、画幅、时长、生命周期。', data: ['project_id', 'workflow_type', 'input_type', 'source_text', 'aspect_ratio'] },
+            { id: 'data-bible', name: 'Bibles', meta: '一致性来源', type: 'data', summary: 'Style / Character / Environment / Prop Bible。分镜只引用 ID，不复制整份设定。', data: ['StyleBible', 'CharacterBible', 'EnvironmentBible'] },
+            { id: 'data-storyboard', name: 'StoryboardItem', meta: '最小工作单元', type: 'data', summary: '每个分镜行贯穿提示词、生图、视频和合成。', data: ['source_text', 'visual_description', 'image_prompt', 'video_prompt', 'selected_image_id', 'selected_video_segment_id'] },
+            { id: 'data-image', name: 'ImageCandidate', meta: '候选图', type: 'data', summary: '每个分镜多张候选图，同一 item 只能选中一张。重生成不删除旧候选。' },
+            { id: 'data-video', name: 'VideoSegment', meta: '视频片段', type: 'data', summary: '每个分镜可生成多个视频片段，确认一个进入合成。' },
+            { id: 'data-task', name: 'Task / TaskStep', meta: '执行记录', type: 'data', summary: '任务记录状态、进度、输入输出、错误和快照。' },
+            { id: 'data-provider', name: '模型 / 工作流配置', meta: 'Provider / Workflow', type: 'model', summary: 'API 模型写 provider_models，ComfyUI / RunningHub 写 workflow_presets。' },
+            {
+              id: 'data-project-files',
+              name: '作品文件 / 作品目录',
+              meta: '作品产物归属',
+              type: 'data',
+              summary: '每个作品都应该有一个受控作品目录。当前作品生产过程中产生的候选图、视频片段、封面、字幕、导出文件、日志和快照都默认放在作品目录，不默认进入素材库。技术路径可继续使用 workspace/projects/{projectId}/。',
+              actions: ['保存作品输入文件', '保存分镜候选图', '保存视频片段', '保存封面和字幕', '保存 final.mp4', '保存日志和任务快照'],
+              data: ['workspace/projects/proj_xxx/', 'project.json', 'images/', 'videos/', 'exports/', 'logs/', 'snapshots/'],
+              fields: {
+                projectDir: 'workspace/projects/{projectId}/',
+                images: '作品内 AI 生图候选图和分镜图',
+                videos: '作品内 AI 视频片段',
+                exports: 'final.mp4、作品导出包',
+                snapshots: '任务快照、模型快照、创作规则快照',
+                promotionRule: '只有用户主动保存为可复用资产，才复制或登记到素材库'
+              },
+              notes: ['作品产物默认属于作品文件夹', '素材库只放可复用资产', '数据库记录相对路径，不记录任意绝对路径']
+            },
+            { id: 'data-storage', name: 'Storage / PathGuard', meta: '文件安全', type: 'risk', summary: '所有媒体文件存工作区相对路径，远程 URL 必须下载转存。StorageService 负责写入作品目录或素材库目录，PathGuard 负责防止越界路径。' }
+          ]
+        }
+      }
+    };
+    // DATA_END
+
+    const state = {
+      viewKey: 'menu',
+      collapsed: new Set(),
+      selectedId: 'menu-root',
+      zoom: 1,
+      nodeMap: new Map(),
+      visibleNodes: [],
+      visibleLinks: []
+    };
+
+    const tabsEl = document.getElementById('tabs');
+    const nodesEl = document.getElementById('nodes');
+    const linksEl = document.getElementById('links');
+    const detailEl = document.getElementById('detailPanel');
+    const quickListEl = document.getElementById('quickList');
+    const canvas = document.getElementById('canvas');
+    const canvasWrap = document.getElementById('canvasWrap');
+    const searchEl = document.getElementById('search');
+
+    function initTabs() {
+      tabsEl.innerHTML = '';
+      Object.entries(views).forEach(([key, view]) => {
+        const btn = document.createElement('button');
+        btn.className = `tab ${key === state.viewKey ? 'active' : ''}`;
+        btn.textContent = view.label;
+        btn.onclick = () => {
+          state.viewKey = key;
+          state.selectedId = views[key].root.id;
+          state.collapsed.clear();
+          searchEl.value = '';
+          render();
+        };
+        tabsEl.appendChild(btn);
+      });
+    }
+
+    function flatten(node, depth = 0, parent = null, list = []) {
+      state.nodeMap.set(node.id, { ...node, depth, parent });
+      list.push({ ...node, depth, parent });
+      (node.children || []).forEach(child => flatten(child, depth + 1, node.id, list));
+      return list;
+    }
+
+    function collectVisible(node, depth = 0, parent = null, rows = new Map(), links = []) {
+      if (!rows.has(depth)) rows.set(depth, []);
+      rows.get(depth).push({ ...node, depth, parent });
+      if (!state.collapsed.has(node.id)) {
+        (node.children || []).forEach(child => {
+          links.push({ from: node.id, to: child.id });
+          collectVisible(child, depth + 1, node.id, rows, links);
+        });
+      }
+      return { rows, links };
+    }
+
+    function layoutTree() {
+      const root = views[state.viewKey].root;
+      state.nodeMap.clear();
+      flatten(root);
+      const { rows, links } = collectVisible(root);
+      const positioned = [];
+      const colWidth = 265;
+      const rowHeight = 78;
+      const topPadding = 55;
+      const leftPadding = 55;
+      [...rows.entries()].forEach(([depth, row]) => {
+        const count = row.length;
+        const startY = topPadding + Math.max(0, (13 - count)) * 18;
+        row.forEach((node, index) => {
+          positioned.push({ ...node, x: leftPadding + depth * colWidth, y: startY + index * rowHeight });
+        });
+      });
+      state.visibleNodes = positioned;
+      state.visibleLinks = links;
+    }
+
+    function drawLinks() {
+      const byId = new Map(state.visibleNodes.map(n => [n.id, n]));
+      linksEl.innerHTML = '';
+      state.visibleLinks.forEach(link => {
+        const from = byId.get(link.from);
+        const to = byId.get(link.to);
+        if (!from || !to) return;
+        const x1 = from.x + 165;
+        const y1 = from.y + 22;
+        const x2 = to.x;
+        const y2 = to.y + 22;
+        const mid = x1 + Math.max(38, (x2 - x1) * .52);
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', `M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`);
+        path.setAttribute('class', `link-path ${link.from === state.selectedId || link.to === state.selectedId ? 'hot' : ''}`);
+        linksEl.appendChild(path);
+      });
+    }
+
+    function drawNodes() {
+      const query = searchEl.value.trim().toLowerCase();
+      nodesEl.innerHTML = '';
+      state.visibleNodes.forEach(node => {
+        const el = document.createElement('div');
+        const hasChildren = (node.children || []).length > 0;
+        const isCollapsed = state.collapsed.has(node.id);
+        const isMatch = query && JSON.stringify(node).toLowerCase().includes(query);
+        el.className = `node-card type-${node.type || 'data'} ${state.selectedId === node.id ? 'active' : ''} ${isCollapsed ? 'collapsed' : ''} ${isMatch ? 'match' : ''}`;
+        el.style.left = `${node.x}px`;
+        el.style.top = `${node.y}px`;
+        el.innerHTML = `<span class="name">${escapeHtml(node.name)}</span><span class="meta">${escapeHtml(node.meta || '')}</span>`;
+        el.onclick = () => {
+          state.selectedId = node.id;
+          renderDetail();
+          drawNodes();
+          drawLinks();
+        };
+        if (hasChildren) {
+          const toggle = document.createElement('button');
+          toggle.className = 'toggle';
+          toggle.textContent = isCollapsed ? '+' : '-';
+          toggle.onclick = event => {
+            event.stopPropagation();
+            if (state.collapsed.has(node.id)) state.collapsed.delete(node.id);
+            else state.collapsed.add(node.id);
+            renderMapOnly();
+          };
+          el.appendChild(toggle);
+        }
+        nodesEl.appendChild(el);
+      });
+    }
+
+    function renderDetail() {
+      const node = state.nodeMap.get(state.selectedId);
+      if (!node) {
+        detailEl.innerHTML = '<div class="empty">点击任意节点查看详情。</div>';
+        return;
+      }
+      const blocks = [
+        ['职责', node.summary ? [node.summary] : []],
+        ['能做什么', node.actions],
+        ['页面控件', node.controls],
+        ['操作步骤', node.steps],
+        ['输入', node.inputs],
+        ['输出', node.outputs],
+        ['前端交互', node.frontend],
+        ['后端服务', node.backend],
+        ['关键数据', node.data],
+        ['关联创作规则', node.skills],
+        ['关联模型 / 工作流', node.models],
+        ['接口 / Command', node.commands],
+        ['注意事项', node.notes]
+      ].filter(([, items]) => items && items.length);
+
+      detailEl.innerHTML = `
+        <div class="detail-head">
+          <span class="detail-type">${escapeHtml(typeLabel(node.type))}</span>
+          <h2 class="detail-title">${escapeHtml(node.name)}</h2>
+          <p class="detail-summary">${escapeHtml(node.meta || '')}</p>
+          <div class="mini-actions">
+            <button id="focusNode">定位节点</button>
+            ${(node.children || []).length ? '<button id="toggleNode">展开/收起</button>' : ''}
+          </div>
+        </div>
+        <div class="detail-body">
+          <div class="info-grid">
+            ${blocks.map(([title, items]) => `
+              <div class="info-card">
+                <h3>${escapeHtml(title)}</h3>
+                ${title === '操作步骤'
+                  ? `<ol>${items.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ol>`
+                  : `<ul>${items.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`}
+              </div>
+            `).join('')}
+            ${node.fields ? `
+              <div class="info-card">
+                <h3>字段 / 配置项</h3>
+                ${Object.entries(node.fields).map(([key, value]) => `
+                  <div class="detail-kv"><b>${escapeHtml(key)}</b><span>${escapeHtml(value)}</span></div>
+                `).join('')}
+              </div>
+            ` : ''}
+            ${node.example ? `<pre class="code">${escapeHtml(node.example)}</pre>` : ''}
+          </div>
+        </div>`;
+
+      document.getElementById('focusNode').onclick = focusSelected;
+      const toggleBtn = document.getElementById('toggleNode');
+      if (toggleBtn) {
+        toggleBtn.onclick = () => {
+          if (state.collapsed.has(node.id)) state.collapsed.delete(node.id);
+          else state.collapsed.add(node.id);
+          renderMapOnly();
+        };
+      }
+    }
+
+    function renderQuickList() {
+      const root = views[state.viewKey].root;
+      const all = flatten(root, 0, null, []);
+      const important = all.filter(n => n.depth <= 1 || ['作品工作台', '内容创作', '创作资源', '视频包', '创作规则', '模型 / 工作流', 'AI 生图', 'AI 视频', '生图输入规划', '视频输入规划', 'ComfyUI / RunningHub', '系统设置'].includes(n.name)).slice(0, 18);
+      quickListEl.innerHTML = '';
+      important.forEach(node => {
+        const btn = document.createElement('button');
+        btn.className = 'quick-link';
+        btn.textContent = node.name;
+        btn.onclick = () => {
+          expandAncestors(node.id);
+          state.selectedId = node.id;
+          renderMapOnly();
+          renderDetail();
+          focusSelected();
+        };
+        quickListEl.appendChild(btn);
+      });
+    }
+
+    function expandAncestors(id) {
+      let node = state.nodeMap.get(id);
+      while (node && node.parent) {
+        state.collapsed.delete(node.parent);
+        node = state.nodeMap.get(node.parent);
+      }
+    }
+
+    function focusSelected() {
+      const node = state.visibleNodes.find(n => n.id === state.selectedId);
+      if (!node) return;
+      canvasWrap.scrollTo({
+        left: Math.max(0, node.x * state.zoom - canvasWrap.clientWidth / 2 + 120),
+        top: Math.max(0, node.y * state.zoom - canvasWrap.clientHeight / 2 + 80),
+        behavior: 'smooth'
+      });
+    }
+
+    function renderMapOnly() {
+      layoutTree();
+      drawLinks();
+      drawNodes();
+      canvas.style.transform = `scale(${state.zoom})`;
+      document.getElementById('zoomReset').textContent = `${Math.round(state.zoom * 100)}%`;
+    }
+
+    function render() {
+      initTabs();
+      renderQuickList();
+      renderMapOnly();
+      renderDetail();
+      setTimeout(focusSelected, 60);
+    }
+
+    function setZoom(next) {
+      state.zoom = Math.max(.55, Math.min(1.45, next));
+      renderMapOnly();
+    }
+
+    function typeLabel(type) {
+      return {
+        root: '根节点',
+        menu: '菜单 / 页面',
+        flow: '流程 / 工作台',
+        model: '模型 / Workflow',
+        data: '数据 / 服务',
+        risk: '边界 / 风险'
+      }[type] || '节点';
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    document.getElementById('expandAll').onclick = () => { state.collapsed.clear(); renderMapOnly(); };
+    document.getElementById('collapseAll').onclick = () => {
+      state.collapsed.clear();
+      flatten(views[state.viewKey].root, 0, null, []).forEach(node => {
+        if (node.depth >= 1 && (node.children || []).length) state.collapsed.add(node.id);
+      });
+      renderMapOnly();
+    };
+    document.getElementById('zoomIn').onclick = () => setZoom(state.zoom + .1);
+    document.getElementById('zoomOut').onclick = () => setZoom(state.zoom - .1);
+    document.getElementById('zoomReset').onclick = () => setZoom(1);
+    searchEl.oninput = () => {
+      const query = searchEl.value.trim().toLowerCase();
+      if (query) {
+        const found = [...state.nodeMap.values()].find(node => JSON.stringify(node).toLowerCase().includes(query));
+        if (found) {
+          expandAncestors(found.id);
+          state.selectedId = found.id;
+        }
+      }
+      renderMapOnly();
+      renderDetail();
+      if (query) setTimeout(focusSelected, 40);
+    };
+
+    if (Object.keys(views).length) render();
+  </script>
+</body>
+</html>

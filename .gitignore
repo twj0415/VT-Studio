@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+**/dist/
+target/
+**/target/
+out/
+build/
+
+# Logs and runtime files
+*.log
+logs/
+*.pid
+*.tmp
+*.temp
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+
+# Local assistant/tooling state
+.git-real/
+.agents/
+.claude/
+.codex/
+
+# Tauri generated artifacts
+app/src-tauri/target/
+app/frontend/dist/

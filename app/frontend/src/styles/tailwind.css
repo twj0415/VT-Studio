@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-page: var(--bg-page);
+  --color-panel: var(--bg-panel);
+  --color-card: var(--bg-card);
+  --color-card-hover: var(--bg-card-hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-line: var(--accent-line);
+  --color-accent-ink: var(--accent-ink);
+  --color-status-pending: var(--st-pending);
+  --color-status-running: var(--st-running);
+  --color-status-retrying: var(--st-retrying);
+  --color-status-succeeded: var(--st-succeeded);
+  --color-status-failed: var(--st-failed);
+  --color-status-cancelled: var(--st-cancelled);
+  --color-status-skipped: var(--st-skipped);
+  --color-status-waiting: var(--st-waiting);
+  --radius-vt-sm: var(--radius-sm);
+  --radius-vt-md: var(--radius-md);
+  --radius-vt-lg: var(--radius-lg);
+  --spacing-vt-1: var(--space-1);
+  --spacing-vt-2: var(--space-2);
+  --spacing-vt-3: var(--space-3);
+  --spacing-vt-4: var(--space-4);
+  --spacing-vt-5: var(--space-5);
+  --spacing-vt-6: var(--space-6);
+  --spacing-vt-8: var(--space-8);
+  --shadow-vt-md: var(--shadow-md);
+  --shadow-vt-lg: var(--shadow-lg);
+}

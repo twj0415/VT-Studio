@@ -1,0 +1,1317 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI 视频生产工具项目架构知识图谱</title>
+  <style>
+    :root {
+      --bg: #151515;
+      --panel: #1d1d1d;
+      --panel-2: #252525;
+      --node: #343434;
+      --node-active: #4a4030;
+      --line: #3e3e3e;
+      --line-strong: #6b604f;
+      --text: #eeeeee;
+      --muted: #a8a8a8;
+      --faint: #747474;
+      --gold: #d8ad68;
+      --green: #72c9aa;
+      --blue: #83a8ff;
+      --red: #f07c7c;
+      --shadow: 0 20px 70px rgba(0, 0, 0, .38);
+      --font: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+      --mono: Consolas, "Courier New", monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        linear-gradient(90deg, rgba(255, 255, 255, .025) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(255, 255, 255, .025) 1px, transparent 1px),
+        var(--bg);
+      background-size: 34px 34px;
+      font-family: var(--font);
+      overflow: hidden;
+      letter-spacing: 0;
+    }
+
+    button, input {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: #5b5142 #1a1a1a;
+    }
+
+    *::-webkit-scrollbar {
+      width: 9px;
+      height: 9px;
+    }
+
+    *::-webkit-scrollbar-track {
+      background: #181818;
+      border: 1px solid #222;
+    }
+
+    *::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, #6a5b44, #3f3a32);
+      border: 2px solid #181818;
+    }
+
+    *::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #d8ad68, #6a5b44);
+    }
+
+    .app {
+      display: grid;
+      grid-template-rows: 58px 1fr;
+      height: 100%;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr) 360px;
+      gap: 14px;
+      align-items: center;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(21, 21, 21, .96);
+      z-index: 5;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      color: #151515;
+      background: var(--gold);
+      font-weight: 900;
+      font-family: var(--mono);
+    }
+
+    .brand-title {
+      min-width: 0;
+    }
+
+    .brand-title h1 {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .brand-title p {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+      overflow-x: auto;
+      padding-bottom: 1px;
+    }
+
+    .tab {
+      flex: 0 0 auto;
+      height: 34px;
+      padding: 0 11px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: #202020;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .tab:hover,
+    .tab.active {
+      color: var(--text);
+      border-color: rgba(216, 173, 104, .58);
+      background: #312b22;
+    }
+
+    .tools {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 7px;
+      min-width: 0;
+    }
+
+    .search {
+      width: 150px;
+      height: 34px;
+      padding: 0 10px;
+      color: var(--text);
+      border: 1px solid var(--line);
+      background: #202020;
+      outline: none;
+      font-size: 12px;
+    }
+
+    .tool-btn {
+      height: 34px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: #202020;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .tool-btn:hover {
+      color: var(--text);
+      border-color: rgba(216, 173, 104, .58);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 250px minmax(0, 1fr) 380px;
+      min-height: 0;
+    }
+
+    .left-panel,
+    .detail-panel {
+      min-height: 0;
+      overflow: auto;
+      border-right: 1px solid var(--line);
+      background: rgba(24, 24, 24, .96);
+    }
+
+    .detail-panel {
+      border-right: 0;
+      border-left: 1px solid var(--line);
+    }
+
+    .panel-block {
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .panel-block h2 {
+      margin: 0 0 9px;
+      color: var(--gold);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .panel-block p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .legend {
+      display: grid;
+      gap: 8px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      display: inline-block;
+      background: var(--node);
+      border: 1px solid #555;
+    }
+
+    .dot.core { background: #473a24; border-color: var(--gold); }
+    .dot.flow { background: #213a34; border-color: var(--green); }
+    .dot.model { background: #24304a; border-color: var(--blue); }
+    .dot.warn { background: #422828; border-color: var(--red); }
+
+    .quick-list {
+      display: grid;
+      gap: 6px;
+    }
+
+    .quick-link {
+      width: 100%;
+      min-height: 32px;
+      padding: 7px 9px;
+      border: 1px solid transparent;
+      color: var(--muted);
+      background: transparent;
+      text-align: left;
+      font-size: 12px;
+    }
+
+    .quick-link:hover {
+      color: var(--text);
+      border-color: var(--line);
+      background: #202020;
+    }
+
+    .canvas-wrap {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      overflow: auto;
+      background:
+        radial-gradient(circle at 40% 20%, rgba(216, 173, 104, .08), transparent 28%),
+        rgba(18, 18, 18, .96);
+    }
+
+    .canvas {
+      position: relative;
+      width: 2500px;
+      height: 1450px;
+      transform-origin: 0 0;
+      transition: transform .18s ease;
+    }
+
+    .links {
+      position: absolute;
+      inset: 0;
+      width: 2500px;
+      height: 1450px;
+      pointer-events: none;
+      overflow: visible;
+    }
+
+    .link-path {
+      fill: none;
+      stroke: #4b4b4b;
+      stroke-width: 1.3;
+    }
+
+    .link-path.hot {
+      stroke: rgba(216, 173, 104, .85);
+      stroke-width: 1.8;
+    }
+
+    .node-card {
+      position: absolute;
+      width: 150px;
+      min-height: 38px;
+      display: grid;
+      align-content: center;
+      padding: 7px 10px;
+      border: 1px solid #4a4a4a;
+      color: var(--text);
+      background: var(--node);
+      box-shadow: 0 8px 22px rgba(0, 0, 0, .2);
+      user-select: none;
+      transition: border-color .15s ease, background .15s ease, transform .15s ease, opacity .15s ease;
+    }
+
+    .node-card:hover {
+      transform: translateY(-1px);
+      border-color: rgba(216, 173, 104, .65);
+      background: #3f3a32;
+    }
+
+    .node-card.active {
+      border-color: var(--gold);
+      background: var(--node-active);
+      box-shadow: 0 0 0 2px rgba(216, 173, 104, .13), 0 14px 28px rgba(0, 0, 0, .3);
+    }
+
+    .node-card.match {
+      border-color: var(--green);
+      box-shadow: 0 0 0 2px rgba(114, 201, 170, .18);
+    }
+
+    .node-card .name {
+      display: block;
+      overflow: hidden;
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 900;
+      line-height: 1.25;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .node-card .meta {
+      display: block;
+      margin-top: 3px;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.2;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .node-card.type-root { width: 172px; background: #4a3720; border-color: var(--gold); }
+    .node-card.type-core { background: #3b3328; border-color: #69583e; }
+    .node-card.type-flow { background: #263934; border-color: #466d60; }
+    .node-card.type-model { background: #293248; border-color: #485b86; }
+    .node-card.type-data { background: #30303d; border-color: #595977; }
+    .node-card.type-risk { background: #3e2828; border-color: #754545; }
+
+    .toggle {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      width: 18px;
+      height: 18px;
+      display: grid;
+      place-items: center;
+      border: 1px solid #5f5f5f;
+      color: var(--text);
+      background: #222;
+      font-size: 12px;
+      font-family: var(--mono);
+      line-height: 1;
+    }
+
+    .node-card.collapsed .toggle {
+      color: #151515;
+      background: var(--gold);
+      border-color: var(--gold);
+    }
+
+    .detail-head {
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+      background: #1b1b1b;
+    }
+
+    .detail-type {
+      display: inline-flex;
+      margin-bottom: 9px;
+      padding: 3px 7px;
+      color: var(--gold);
+      border: 1px solid rgba(216, 173, 104, .42);
+      background: rgba(216, 173, 104, .07);
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .detail-title {
+      margin: 0;
+      font-size: 19px;
+      line-height: 1.28;
+    }
+
+    .detail-summary {
+      margin: 9px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .detail-body {
+      padding: 16px;
+    }
+
+    .info-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .info-card {
+      padding: 11px;
+      border: 1px solid var(--line);
+      background: #202020;
+    }
+
+    .info-card h3 {
+      margin: 0 0 6px;
+      color: var(--gold);
+      font-size: 12px;
+    }
+
+    .info-card ul {
+      margin: 0;
+      padding-left: 17px;
+      color: #d8d8d8;
+      font-size: 12px;
+      line-height: 1.58;
+    }
+
+    .info-card li + li {
+      margin-top: 3px;
+    }
+
+    .detail-section {
+      display: grid;
+      gap: 10px;
+    }
+
+    .detail-section + .detail-section {
+      margin-top: 12px;
+    }
+
+    .detail-kv {
+      display: grid;
+      grid-template-columns: 86px minmax(0, 1fr);
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, .06);
+      color: #d8d8d8;
+      font-size: 12px;
+      line-height: 1.52;
+    }
+
+    .detail-kv b {
+      color: var(--gold);
+      font-weight: 900;
+    }
+
+    .detail-steps {
+      margin: 0;
+      padding-left: 18px;
+      color: #d8d8d8;
+      font-size: 12px;
+      line-height: 1.62;
+    }
+
+    .detail-steps li + li {
+      margin-top: 5px;
+    }
+
+    .code {
+      margin: 0;
+      padding: 11px;
+      overflow: auto;
+      color: #e6dfd0;
+      border: 1px solid var(--line);
+      background: #101010;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.52;
+    }
+
+    .empty {
+      padding: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .mini-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .mini-actions button {
+      min-height: 30px;
+      padding: 0 9px;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      background: #202020;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .mini-actions button:hover {
+      color: var(--text);
+      border-color: var(--gold);
+    }
+
+    @media (max-width: 1180px) {
+      body { overflow: auto; }
+      .app { height: auto; min-height: 100vh; }
+      .topbar { grid-template-columns: 1fr; }
+      .tools { justify-content: flex-start; flex-wrap: wrap; }
+      .workspace { grid-template-columns: 1fr; }
+      .left-panel, .detail-panel { max-height: none; border: 0; border-bottom: 1px solid var(--line); }
+      .canvas-wrap { height: 720px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">MAP</div>
+        <div class="brand-title">
+          <h1>AI 视频生产工具项目架构知识图谱</h1>
+          <p>树状架构 · 点击节点看职责、输入、输出、数据和交互</p>
+        </div>
+      </div>
+
+      <div class="tabs" id="tabs"></div>
+
+      <div class="tools">
+        <input id="search" class="search" placeholder="搜索模块 / 数据 / 模型" />
+        <button class="tool-btn" id="expandAll">全部展开</button>
+        <button class="tool-btn" id="collapseAll">收起细节</button>
+        <button class="tool-btn" id="zoomOut">-</button>
+        <button class="tool-btn" id="zoomReset">100%</button>
+        <button class="tool-btn" id="zoomIn">+</button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <aside class="left-panel">
+        <div class="panel-block">
+          <h2>怎么看这张图</h2>
+          <p>左到右是父子层级。点击节点看右侧详情；点击节点右上角按钮可以收起或展开子节点。顶部可以切换不同视图。</p>
+        </div>
+        <div class="panel-block">
+          <h2>节点类型</h2>
+          <div class="legend">
+            <div class="legend-item"><span class="dot core"></span>项目核心 / 产品模块</div>
+            <div class="legend-item"><span class="dot flow"></span>流程 / 工作台 / 执行链路</div>
+            <div class="legend-item"><span class="dot model"></span>模型 / Provider / Workflow</div>
+            <div class="legend-item"><span class="dot"></span>数据 / 服务 / 存储</div>
+            <div class="legend-item"><span class="dot warn"></span>边界 / 风险 / 禁止项</div>
+          </div>
+        </div>
+        <div class="panel-block">
+          <h2>快速定位</h2>
+          <div class="quick-list" id="quickList"></div>
+        </div>
+      </aside>
+
+      <main class="canvas-wrap" id="canvasWrap">
+        <div class="canvas" id="canvas">
+          <svg class="links" id="links"></svg>
+          <div id="nodes"></div>
+        </div>
+      </main>
+
+      <aside class="detail-panel" id="detailPanel">
+        <div class="empty">点击任意节点查看详情。建议先看“项目总架构”，再进入“视频包体系”“模型适配体系”“动态输入规划”。</div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    const views = {
+      project: {
+        label: '项目架构',
+        root: {
+          id: 'root',
+          name: 'AI 短视频生成工具',
+          meta: '项目总入口',
+          type: 'root',
+          summary: '桌面端 AI 短视频生产工具。核心目标是把主题、文案、文章、小说或素材，稳定变成可编辑、可重试、可导出的短视频。',
+          inputs: ['主题 / 粘贴文案 / 文章 / 小说 / 素材'],
+          outputs: ['Storyboard', 'ImageCandidate', 'VideoSegment', 'final.mp4', '项目历史'],
+          frontend: ['首页', '新建项目', '工作台入口', '历史项目'],
+          backend: ['ProjectService', 'PipelineEngine', 'ProviderManager', 'StorageService'],
+          data: ['Project', 'Task', 'TaskStep', 'Asset', 'ExportPackage'],
+          children: [
+            {
+              id: 'entry',
+              name: '用户入口',
+              meta: '输入来源',
+              type: 'core',
+              summary: '用户从不同类型内容进入系统，入口只负责归一化输入和创建项目，不负责最终成片。',
+              inputs: ['topic', 'paste', 'article', 'novel', 'material'],
+              outputs: ['Project', 'InputSource'],
+              frontend: ['InputTypeTabs', 'CreateProjectForm', 'PackSelector'],
+              backend: ['create_project', 'normalize_input_source'],
+              data: ['Project.input_type', 'Project.source_text', 'Project.source_text_path'],
+              children: [
+                { id: 'entry-topic', name: '主题输入', meta: '一句话生成', type: 'core', summary: '适合知识科普、清单盘点、观点类短视频。', outputs: ['topic', 'target_scene_count', 'tone'] },
+                { id: 'entry-paste', name: '粘贴文案', meta: '固定原文', type: 'core', summary: '适合用户已有口播稿或情绪文案。paste 模式下 source_text 原文不能被 AI 随意改写。', outputs: ['source_text', 'split_mode'] },
+                { id: 'entry-article', name: '文章 / 长文', meta: '提炼结构', type: 'core', summary: '适合公众号、小红书长文、笔记转视频。长文本走 source_text_path。', outputs: ['source_text_path', 'summary', 'sections'] },
+                { id: 'entry-novel', name: '小说 / 剧情', meta: '章节事件', type: 'core', summary: '适合长内容改编。需要分章、事件抽取、人物场景设定。', outputs: ['NovelChapter', 'structured_event'] },
+                { id: 'entry-material', name: '素材导入', meta: '已有素材成片', type: 'core', summary: '适合用户已有图片/视频/音频，后续进入 material_edit workflow。', outputs: ['Asset', 'AssetReference'] }
+              ]
+            },
+            {
+              id: 'workflow',
+              name: 'Workflow 体系',
+              meta: '生产链路',
+              type: 'flow',
+              summary: 'WorkflowType 表示生产链路，不等于内容包，也不等于模型。当前主线是 image_to_video。',
+              outputs: ['TaskStep 列表', '页面路径', 'PipelinePlan'],
+              data: ['Project.workflow_type', 'Task.task_kind', 'TaskStep.step_kind'],
+              children: [
+                { id: 'wf-i2v', name: 'image_to_video', meta: '当前主线', type: 'flow', summary: '输入文字到分镜、生图、图生视频、合成导出。', outputs: ['final.mp4'] },
+                { id: 'wf-slideshow', name: 'image_slideshow', meta: '纯图文成片', type: 'flow', summary: '图片、字幕、模板、动效、配音合成，作为后续增强 workflow。' },
+                { id: 'wf-human', name: 'digital_human', meta: '数字人口播', type: 'flow', summary: '数字人、口播音频、字幕、背景素材独立链路。' },
+                { id: 'wf-material', name: 'material_edit', meta: '素材成片', type: 'flow', summary: '素材分析、筛选、编排、包装成片。' }
+              ]
+            },
+            {
+              id: 'pack',
+              name: '视频包体系',
+              meta: '内容策略',
+              type: 'core',
+              summary: 'ProductionPack 是内容策略包。它绑定 Skill、规则、默认参数和审核策略，但不直接等于模型。',
+              inputs: ['workflowType', 'inputType', 'contentCategory'],
+              outputs: ['packSnapshot', 'skillBindings', 'rules'],
+              frontend: ['PackSelector', 'PackManager', 'RuleEditor'],
+              backend: ['PackService', 'SkillBindingResolver'],
+              data: ['ProductionPack', 'ProductionPackVersion'],
+              children: [
+                { id: 'pack-children', name: '儿童教育包', meta: '安全正向', type: 'core', summary: '温和、清楚、正向示范，禁止恐吓、羞辱、暴力惩罚。', outputs: ['children_education rules'] },
+                { id: 'pack-knowledge', name: '知识科普包', meta: '概念解释', type: 'core', summary: '问题、概念、例子、结论，镜头偏信息可视化。' },
+                { id: 'pack-novel', name: '小说剧情包', meta: '人物冲突', type: 'core', summary: '重视角色一致性、场景连续性、冲突推进和镜头节奏。' },
+                { id: 'pack-product', name: '产品广告包', meta: '卖点转化', type: 'core', summary: '痛点、卖点、使用场景、行动号召，支持品牌素材引用。' },
+                { id: 'pack-custom', name: '用户自定义包', meta: '复制内置包', type: 'core', summary: '内置包只读，编辑时复制为用户包，保留版本历史。' }
+              ]
+            },
+            {
+              id: 'workbench',
+              name: '生产工作台',
+              meta: '用户编辑确认',
+              type: 'flow',
+              summary: '所有 AI 生成结果都必须可看、可改、可重试。用户确认是主线稳定的关键。',
+              outputs: ['已确认分镜', '已选图片', '已选视频片段'],
+              frontend: ['StoryboardTable', 'BiblePanel', 'ImageCandidateGrid', 'VideoSegmentList'],
+              children: [
+                { id: 'wb-storyboard', name: '分镜工作台', meta: 'StoryboardItem', type: 'flow', summary: '每行一个分镜，可编辑原文、画面、角色、场景、时长、镜头。' },
+                { id: 'wb-bible', name: '设定集面板', meta: 'Bibles', type: 'flow', summary: '画风、角色、场景、道具统一维护，解决一致性。' },
+                { id: 'wb-image', name: '生图表格', meta: '候选图', type: 'flow', summary: '每个分镜多张候选图，用户选择 selectedImageId。' },
+                { id: 'wb-video', name: '视频生成页', meta: '输入规划', type: 'flow', summary: '根据当前模型要求显示首帧、尾帧、参考图、pose、depth、mask 等缺项。' },
+                { id: 'wb-compose', name: '合成导出页', meta: 'final.mp4', type: 'flow', summary: '按分镜顺序拼接已选视频片段，输出 final.mp4。' }
+              ]
+            },
+            {
+              id: 'backend',
+              name: '后端核心服务',
+              meta: 'Rust / Tauri',
+              type: 'data',
+              summary: '后端负责生产线、任务、模型能力、文件安全和持久化。前端不直接调用模型。',
+              backend: ['ProjectService', 'PipelineEngine', 'ModelInputPlanner', 'ProviderManager', 'StorageService'],
+              children: [
+                { id: 'svc-project', name: 'ProjectService', meta: '项目和草稿', type: 'data', summary: '创建项目、保存草稿、读取项目状态。' },
+                { id: 'svc-pipeline', name: 'PipelineEngine', meta: '任务编排', type: 'data', summary: '按 workflow 生成 TaskStep，支持断点续跑和幂等重试。' },
+                { id: 'svc-planner', name: 'ModelInputPlanner', meta: '动态输入', type: 'data', summary: '合并工作流、包、Skill、模型能力和当前资产，返回 ModelInputPlan。' },
+                { id: 'svc-provider', name: 'ProviderManager', meta: '统一模型调用', type: 'model', summary: '统一调用 LLM、Image、Video、VLM、TTS、Workflow。' },
+                { id: 'svc-storage', name: 'StorageService', meta: '文件安全', type: 'data', summary: '所有读写经过 PathGuard，数据库只存相对路径。' }
+              ]
+            },
+            {
+              id: 'infra',
+              name: '基础设施',
+              meta: '本地可靠性',
+              type: 'data',
+              summary: '桌面端必须保证本地文件、密钥、任务和媒体处理可靠。',
+              children: [
+                { id: 'infra-sqlite', name: 'SQLite', meta: '结构化数据', type: 'data', summary: 'Project、StoryboardItem、Task、Asset、Provider 配置等权威数据。' },
+                { id: 'infra-files', name: 'Workspace Files', meta: '媒体文件', type: 'data', summary: '图片、视频、音频、导出文件全部存工作区相对路径。' },
+                { id: 'infra-ffmpeg', name: 'FFmpeg Sidecar', meta: '合成转码', type: 'data', summary: '拼接、转码、probe、混音、字幕烧录等媒体处理。' },
+                { id: 'infra-keyring', name: 'Keyring', meta: '密钥安全', type: 'risk', summary: 'API Key 不进 SQLite、不进日志、不进导出包。' },
+                { id: 'infra-path', name: 'PathGuard', meta: '路径安全', type: 'risk', summary: '禁止任意路径读写，所有文件访问必须在受控工作区内。' }
+              ]
+            }
+          ]
+        }
+      },
+      pipeline: {
+        label: '主流程',
+        root: {
+          id: 'pipeline-root',
+          name: 'image_to_video 主线',
+          meta: '文字到成片',
+          type: 'root',
+          summary: '当前优先跑通的主流程：输入文字 -> 分镜 -> 设定集 -> 生图 -> 选图 -> 视频输入规划 -> 图生视频 -> 合成导出。',
+          children: [
+            { id: 'p1', name: '01 新建项目', meta: 'Project', type: 'flow', summary: '选择输入类型、视频包、画幅、目标时长和分镜数。', outputs: ['Project', '默认 Bible'], backend: ['create_project'] },
+            { id: 'p2', name: '02 脚本 / 文案处理', meta: 'Script', type: 'flow', summary: '主题和文章可以生成脚本；粘贴文案保持原文；小说走章节事件。', inputs: ['InputSource', 'ProductionPack'], outputs: ['ScriptNarrations'] },
+            { id: 'p3', name: '03 分镜生成', meta: 'Storyboard', type: 'flow', summary: '使用包绑定的 Storyboard Skill，生成分镜行。', inputs: ['Script', 'PackRules'], outputs: ['StoryboardItem[]'] },
+            { id: 'p4', name: '04 设定集生成', meta: 'Bible', type: 'flow', summary: '抽取画风、角色、场景、道具，供后续一致性使用。', outputs: ['StyleBible', 'CharacterBible', 'EnvironmentBible'] },
+            { id: 'p5', name: '05 生图提示词', meta: 'ImagePrompt', type: 'flow', summary: 'Style Bible + Character Bible + Environment Bible + 分镜画面描述，生成 imagePrompt。', outputs: ['imagePrompt', 'negativePrompt'] },
+            { id: 'p6', name: '06 AI 生图', meta: 'ImageCandidate', type: 'model', summary: '每个分镜生成多张候选图，旧候选不删除。', outputs: ['ImageCandidate[]'] },
+            { id: 'p7', name: '07 用户选图', meta: 'selectedImageId', type: 'flow', summary: '每个分镜必须确认一张图，作为普通图生视频的首帧。', outputs: ['StoryboardItem.selectedImageId'] },
+            { id: 'p8', name: '08 视频输入规划', meta: 'ModelInputPlan', type: 'data', summary: '根据当前视频模型判断需要首帧、尾帧、参考图、pose、depth、mask 或 workflow 参数。', outputs: ['ModelInputPlan'] },
+            { id: 'p9', name: '09 AI 视频', meta: 'VideoSegment', type: 'model', summary: '调用 API 视频模型或 WorkflowPreset，生成视频片段。', outputs: ['VideoSegment[]'] },
+            { id: 'p10', name: '10 片段确认', meta: 'selectedVideoSegmentId', type: 'flow', summary: '每个分镜确认一个片段进入最终合成。', outputs: ['StoryboardItem.selectedVideoSegmentId'] },
+            { id: 'p11', name: '11 合成导出', meta: 'final.mp4', type: 'data', summary: '按 item_index 顺序拼接视频片段，输出 final.mp4。', backend: ['FFmpegService'], outputs: ['CompositionTask', 'exports/final.mp4'] }
+          ]
+        }
+      },
+      pack: {
+        label: '包 / Skill',
+        root: {
+          id: 'pack-root',
+          name: '视频包 + Skill 体系',
+          meta: '内容策略和创作方法',
+          type: 'root',
+          summary: '视频包不是模型，也不是完整流程复制。包引用版本化 Skill 和规则，Skill 输出结构化内容。',
+          children: [
+            {
+              id: 'prod-pack',
+              name: 'ProductionPack',
+              meta: '内容策略包',
+              type: 'core',
+              summary: '决定内容语气、叙事结构、安全规则、默认参数和推荐 Skill。',
+              children: [
+                { id: 'pack-fields', name: '包字段', meta: 'schema', type: 'data', summary: 'packId、name、version、editable、workflowDefaults、skillBindings、rules、modelPreferences。' },
+                { id: 'pack-manage', name: '包管理模块', meta: '可查看编辑', type: 'flow', summary: '内置包只读，编辑时复制为用户包；支持版本历史和启用/禁用。' },
+                { id: 'pack-conflict', name: '冲突处理', meta: '覆盖优先级', type: 'risk', summary: '项目设置 > 用户包规则 > 内置包规则 > 默认系统规则。任务创建时冻结快照。' }
+              ]
+            },
+            {
+              id: 'skill-registry',
+              name: 'Skill Registry',
+              meta: '版本化创作方法',
+              type: 'core',
+              summary: '所有 Prompt/Skill 必须版本化、schema 校验、任务快照。',
+              children: [
+                { id: 'skill-script', name: 'script.*', meta: '脚本', type: 'flow', summary: '主题/文章转脚本，或粘贴文案规整。输出 ScriptNarrations。' },
+                { id: 'skill-storyboard', name: 'storyboard.*', meta: '分镜规则', type: 'flow', summary: '儿童教育、小说、科普的分镜规则可以不同。输出 StoryboardItems。' },
+                { id: 'skill-character', name: 'asset.character.*', meta: '角色抽取', type: 'flow', summary: '生成 Character Bible 草稿，用户确认后入库。' },
+                { id: 'skill-scene', name: 'asset.environment.*', meta: '场景抽取', type: 'flow', summary: '生成 Environment Bible 草稿，用户确认后入库。' },
+                { id: 'skill-image-prompt', name: 'image_prompt.*', meta: '生图词', type: 'flow', summary: '拼装 imagePrompt 和 negativePrompt。' },
+                { id: 'skill-video-prompt', name: 'video_prompt.*', meta: '视频词', type: 'flow', summary: '生成动作、镜头、运动描述。' },
+                { id: 'skill-review', name: 'review.*', meta: '审核', type: 'risk', summary: '安全、风格、缺项、质量检查，输出 ReviewReport。' }
+              ]
+            },
+            {
+              id: 'pack-examples',
+              name: '包示例',
+              meta: '可扩展',
+              type: 'core',
+              summary: '不同内容包引用不同 Skill 或同一 Skill 的不同参数。',
+              children: [
+                { id: 'children-pack', name: '儿童教育包', meta: 'children_education', type: 'core', summary: '结构：问题行为 -> 后果展示 -> 正确示范 -> 温和总结。禁止恐吓、羞辱和暴力。' },
+                { id: 'knowledge-pack', name: '知识科普包', meta: 'knowledge', type: 'core', summary: '结构：问题 -> 概念 -> 类比 -> 例子 -> 结论。' },
+                { id: 'novel-pack', name: '小说剧情包', meta: 'story', type: 'core', summary: '结构：人物 -> 目标 -> 冲突 -> 转折 -> 悬念。' },
+                { id: 'product-pack', name: '产品广告包', meta: 'product', type: 'core', summary: '结构：痛点 -> 卖点 -> 场景 -> 证明 -> 行动。' }
+              ]
+            }
+          ]
+        }
+      },
+      model: {
+        label: '模型适配',
+        root: {
+          id: 'model-root',
+          name: '多模型适配体系',
+          meta: 'API + ComfyUI + 其他',
+          type: 'root',
+          summary: '不同模型需要的输入不同，不能用一个固定流程生成所有模型需要的数据。必须通过能力矩阵和 ModelInputPlanner 动态决定。',
+          children: [
+            {
+              id: 'selector',
+              name: '统一模型选择器',
+              meta: 'ExecutableModelOption',
+              type: 'flow',
+              summary: '前端只展示可执行选项，不关心底层是 API 模型还是 workflow preset。',
+              outputs: ['ExecutableModelOptionDto'],
+              children: [
+                { id: 'provider-model-option', name: 'provider_model', meta: 'API 模型', type: 'model', summary: 'OpenAI Image、DashScope、Kling、Seedance、Luma、Runway 等。' },
+                { id: 'workflow-preset-option', name: 'workflow_preset', meta: '工作流预设', type: 'model', summary: 'ComfyUI 本地、RunningHub 云端工作流。' }
+              ]
+            },
+            {
+              id: 'capability',
+              name: '能力矩阵',
+              meta: 'ProviderCapability',
+              type: 'model',
+              summary: '描述模型支持什么、需要什么、限制什么。后端校验，前端禁用只做体验优化。',
+              children: [
+                { id: 'cap-i2v', name: '普通图生视频', meta: 'startFrame', type: 'model', summary: '需要首帧图 startFrame + videoPrompt + duration。' },
+                { id: 'cap-endframe', name: '首尾帧视频', meta: 'start + end', type: 'model', summary: '需要 startFrame + endFrame + videoPrompt，适合控制动作起止。' },
+                { id: 'cap-reference', name: '参考图视频', meta: 'reference', type: 'model', summary: '需要 characterReference / styleReference / sceneReference，受 maxReferenceImages 限制。' },
+                { id: 'cap-comfy', name: 'ComfyUI Workflow', meta: 'workflowJson', type: 'model', summary: '可能需要 workflowJson、pose、depth、mask、frames、fps、nodeMap、outputMap。' },
+                { id: 'cap-no-shot', name: '无分镜图模型', meta: 'assets + prompt', type: 'model', summary: '不要求每个分镜先生成图，但需要资产图、多参数 prompt、角色场景描述。' }
+              ]
+            },
+            {
+              id: 'registries',
+              name: 'Registry',
+              meta: '模型注册',
+              type: 'data',
+              summary: 'API 模型和工作流预设分开存储，统一返回给前端。',
+              children: [
+                { id: 'model-registry', name: 'ModelRegistry', meta: 'API 能力', type: 'data', summary: '读取 provider_models，校验 abilityTypes、inputModalities、limits。' },
+                { id: 'workflow-registry', name: 'WorkflowRegistry', meta: 'Workflow 能力', type: 'data', summary: '读取 workflow_presets，校验 paramSchema、nodeMap、outputMap。' },
+                { id: 'provider-manager', name: 'ProviderManager', meta: '统一执行', type: 'model', summary: '业务层唯一模型调用入口。' }
+              ]
+            }
+          ]
+        }
+      },
+      data: {
+        label: '数据结构',
+        root: {
+          id: 'data-root',
+          name: '核心数据结构',
+          meta: '单一事实来源',
+          type: 'root',
+          summary: 'Project 是容器，Bible 是统一设定，StoryboardItem 是最小工作单元，ImageCandidate 和 VideoSegment 是生成产物，Task/TaskStep 是执行记录。',
+          children: [
+            {
+              id: 'project-data',
+              name: 'Project',
+              meta: '项目容器',
+              type: 'data',
+              summary: '一次创作一个 Project，记录输入、workflow、内容语言、全局设定。',
+              children: [
+                { id: 'project-fields', name: '核心字段', meta: 'fields', type: 'data', summary: 'projectId、title、workflowType、inputType、sourceText、aspectRatio、targetDurationSeconds。' },
+                { id: 'pack-binding', name: 'PackBinding', meta: '包快照', type: 'data', summary: '记录当前项目使用哪个 ProductionPack 和版本，以及用户覆盖的规则。' }
+              ]
+            },
+            {
+              id: 'bible-data',
+              name: 'Bibles',
+              meta: '一致性来源',
+              type: 'data',
+              summary: '一致性来自 Bible，不靠每个分镜自由发挥。',
+              children: [
+                { id: 'style-bible', name: 'Style Bible', meta: '画风', type: 'data', summary: 'stylePrompt、colorPalette、lighting、composition、referenceImage。' },
+                { id: 'char-bible', name: 'Character Bible', meta: '角色', type: 'data', summary: 'characterId、外观、服装、signatureItems、referenceImages。' },
+                { id: 'env-bible', name: 'Environment Bible', meta: '场景', type: 'data', summary: 'locationId、layout、lighting、props、referenceImages。' }
+              ]
+            },
+            {
+              id: 'storyboard-data',
+              name: 'StoryboardItem',
+              meta: '最小工作单元',
+              type: 'data',
+              summary: '每个分镜行都会流经提示词、生图、视频、合成。',
+              children: [
+                { id: 'sb-text', name: '文本字段', meta: 'source/narration', type: 'data', summary: 'sourceText、narrationText、subtitleChunks。' },
+                { id: 'sb-visual', name: '画面字段', meta: 'visual', type: 'data', summary: 'visualDescription、characterIds、locationId、props。' },
+                { id: 'sb-prompt', name: '提示词字段', meta: 'prompt', type: 'data', summary: 'imagePrompt、negativePrompt、videoPrompt。' },
+                { id: 'sb-select', name: '选择结果', meta: 'selected', type: 'data', summary: 'selectedImageId、selectedVideoSegmentId。' },
+                { id: 'sb-lock', name: '锁定字段', meta: 'lockFlags', type: 'risk', summary: '用户锁定字段，批量重生成不可覆盖。' }
+              ]
+            },
+            {
+              id: 'artifact-data',
+              name: 'Artifacts',
+              meta: '生成产物',
+              type: 'data',
+              summary: '重生成产生新候选或新版本，不直接覆盖旧产物。',
+              children: [
+                { id: 'image-candidate', name: 'ImageCandidate', meta: '候选图', type: 'data', summary: 'imagePath、prompt、providerModelId、workflowPresetId、selected、status。' },
+                { id: 'video-segment', name: 'VideoSegment', meta: '视频片段', type: 'data', summary: 'videoPath、inputImageId、videoPrompt、duration、selected、status。' },
+                { id: 'composition-task', name: 'CompositionTask', meta: '合成', type: 'data', summary: 'segmentIds、outputPath、status、progress。' }
+              ]
+            },
+            {
+              id: 'task-data',
+              name: 'Task / TaskStep',
+              meta: '执行记录',
+              type: 'data',
+              summary: '每一次生成动作都是任务。任务创建时冻结 Provider、Model、Workflow、Skill、Pack 快照。',
+              children: [
+                { id: 'task-main', name: 'Task', meta: '任务', type: 'data', summary: 'taskKind、taskStatus、currentStepKind、progress、snapshotJson。' },
+                { id: 'task-step', name: 'TaskStep', meta: '步骤', type: 'data', summary: 'stepKind、stepStatus、inputJson、outputJson、errorJson、retryCount。' },
+                { id: 'task-snapshot', name: 'Snapshot', meta: '历史复现', type: 'data', summary: 'providerSnapshot、modelSnapshot、workflowSnapshot、skillSnapshots、packSnapshot。' }
+              ]
+            }
+          ]
+        }
+      },
+      frontend: {
+        label: '前后端',
+        root: {
+          id: 'fb-root',
+          name: '前后端调用体系',
+          meta: 'Vue -> Tauri -> Rust',
+          type: 'root',
+          summary: '前端负责交互和动态展示，后端负责业务、任务、模型能力和文件安全。',
+          children: [
+            {
+              id: 'front-pages',
+              name: '前端页面',
+              meta: 'Vue 3',
+              type: 'flow',
+              summary: '页面通过 API client 调 Tauri command，不直接调模型、不直接拼工作流。',
+              children: [
+                { id: 'page-home', name: '首页 / 项目列表', meta: 'Home', type: 'flow', summary: '项目列表、草稿、历史、最近导出。' },
+                { id: 'page-create', name: '新建项目', meta: 'CreateProject', type: 'flow', summary: '输入类型、视频包、workflow、画幅、目标时长。' },
+                { id: 'page-storyboard', name: '分镜工作台', meta: 'StoryboardEditor', type: 'flow', summary: '分镜表格、详情抽屉、设定集面板。' },
+                { id: 'page-image', name: '生图表格', meta: 'ImageGeneration', type: 'flow', summary: 'prompt 单元格、候选图网格、选图状态。' },
+                { id: 'page-video', name: 'AI 视频页', meta: 'VideoGeneration', type: 'flow', summary: '模型选择、输入计划、缺项补齐、片段确认。' },
+                { id: 'page-settings', name: '设置 / 模型配置', meta: 'Settings', type: 'flow', summary: 'Provider、API 模型、Workflow Preset、连接测试。' }
+              ]
+            },
+            {
+              id: 'front-dynamic',
+              name: '动态 UI',
+              meta: 'ModelInputPlan',
+              type: 'flow',
+              summary: '前端不知道每个模型要什么，由 getModelInputPlan 返回 requirements 后渲染。',
+              children: [
+                { id: 'ui-ready', name: 'ready', meta: '已满足', type: 'flow', summary: '显示通过，可查看来源资产。' },
+                { id: 'ui-missing', name: 'missing', meta: '缺必填', type: 'risk', summary: '显示生成、上传、选择资产、切换模型。' },
+                { id: 'ui-locked', name: 'locked', meta: '用户锁定', type: 'risk', summary: '不能批量覆盖，需用户解锁。' },
+                { id: 'ui-stale', name: 'stale', meta: '已过期', type: 'risk', summary: '提示刷新或继续沿用旧版本。' }
+              ]
+            },
+            {
+              id: 'tauri',
+              name: 'Tauri Commands',
+              meta: '薄入口',
+              type: 'data',
+              summary: 'Command 只接参数、校验 DTO、调用 Service、返回 DTO。',
+              children: [
+                { id: 'cmd-project', name: 'project_commands', meta: '项目', type: 'data', summary: 'createProject、getProject、updateProject。' },
+                { id: 'cmd-pack', name: 'pack_commands', meta: '包', type: 'data', summary: 'listProductionPacks、saveProductionPack。' },
+                { id: 'cmd-media', name: 'media_commands', meta: '媒体', type: 'data', summary: 'generateImages、getModelInputPlan、generateVideo。' },
+                { id: 'cmd-provider', name: 'provider_commands', meta: '模型', type: 'data', summary: 'listExecutableMediaOptions、testProvider、testWorkflowPreset。' }
+              ]
+            },
+            {
+              id: 'rust-services',
+              name: 'Rust Services',
+              meta: '业务核心',
+              type: 'data',
+              summary: '真正的业务逻辑和任务执行在 Service 层。',
+              children: [
+                { id: 'rs-project', name: 'ProjectService', meta: '项目', type: 'data', summary: '项目和草稿。' },
+                { id: 'rs-pack', name: 'PackService', meta: '包', type: 'data', summary: '包解析、版本、快照。' },
+                { id: 'rs-skill', name: 'PromptSkillService', meta: 'Skill', type: 'data', summary: 'Skill 渲染、schema 校验、快照。' },
+                { id: 'rs-pipeline', name: 'PipelineEngine', meta: '任务', type: 'data', summary: 'TaskStep 编排、重试、恢复。' },
+                { id: 'rs-provider', name: 'ProviderManager', meta: '模型', type: 'model', summary: '统一模型调用和错误映射。' },
+                { id: 'rs-storage', name: 'StorageService', meta: '文件', type: 'data', summary: '相对路径、下载转存、PathGuard。' }
+              ]
+            }
+          ]
+        }
+      }
+    };
+
+    const state = {
+      viewKey: 'project',
+      collapsed: new Set(),
+      selectedId: 'root',
+      zoom: 1,
+      nodeMap: new Map(),
+      visibleNodes: [],
+      visibleLinks: []
+    };
+
+    const tabsEl = document.getElementById('tabs');
+    const nodesEl = document.getElementById('nodes');
+    const linksEl = document.getElementById('links');
+    const detailEl = document.getElementById('detailPanel');
+    const quickListEl = document.getElementById('quickList');
+    const canvas = document.getElementById('canvas');
+    const canvasWrap = document.getElementById('canvasWrap');
+    const searchEl = document.getElementById('search');
+
+    function initTabs() {
+      tabsEl.innerHTML = '';
+      Object.entries(views).forEach(([key, view]) => {
+        const btn = document.createElement('button');
+        btn.className = `tab ${key === state.viewKey ? 'active' : ''}`;
+        btn.textContent = view.label;
+        btn.onclick = () => {
+          state.viewKey = key;
+          state.selectedId = views[key].root.id;
+          state.collapsed.clear();
+          searchEl.value = '';
+          render();
+        };
+        tabsEl.appendChild(btn);
+      });
+    }
+
+    function flatten(node, depth = 0, parent = null, list = []) {
+      state.nodeMap.set(node.id, { ...node, depth, parent });
+      list.push({ ...node, depth, parent });
+      (node.children || []).forEach(child => flatten(child, depth + 1, node.id, list));
+      return list;
+    }
+
+    function collectVisible(node, depth = 0, parent = null, rows = new Map(), links = []) {
+      if (!rows.has(depth)) rows.set(depth, []);
+      const visibleNode = { ...node, depth, parent };
+      rows.get(depth).push(visibleNode);
+      const hidden = state.collapsed.has(node.id);
+      if (!hidden) {
+        (node.children || []).forEach(child => {
+          links.push({ from: node.id, to: child.id });
+          collectVisible(child, depth + 1, node.id, rows, links);
+        });
+      }
+      return { rows, links };
+    }
+
+    function layoutTree() {
+      const root = views[state.viewKey].root;
+      state.nodeMap.clear();
+      flatten(root);
+      const { rows, links } = collectVisible(root);
+      const positioned = [];
+      const colWidth = 245;
+      const rowHeight = 78;
+      const topPadding = 55;
+      const leftPadding = 55;
+
+      [...rows.entries()].forEach(([depth, row]) => {
+        const count = row.length;
+        const startY = topPadding + Math.max(0, (12 - count)) * 20;
+        row.forEach((node, index) => {
+          positioned.push({
+            ...node,
+            x: leftPadding + depth * colWidth,
+            y: startY + index * rowHeight
+          });
+        });
+      });
+
+      state.visibleNodes = positioned;
+      state.visibleLinks = links;
+    }
+
+    function drawLinks() {
+      const byId = new Map(state.visibleNodes.map(n => [n.id, n]));
+      linksEl.innerHTML = '';
+      state.visibleLinks.forEach(link => {
+        const from = byId.get(link.from);
+        const to = byId.get(link.to);
+        if (!from || !to) return;
+        const x1 = from.x + 150;
+        const y1 = from.y + 20;
+        const x2 = to.x;
+        const y2 = to.y + 20;
+        const mid = x1 + Math.max(36, (x2 - x1) * .52);
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', `M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`);
+        path.setAttribute('class', `link-path ${link.from === state.selectedId || link.to === state.selectedId ? 'hot' : ''}`);
+        linksEl.appendChild(path);
+      });
+    }
+
+    function drawNodes() {
+      const query = searchEl.value.trim().toLowerCase();
+      nodesEl.innerHTML = '';
+      state.visibleNodes.forEach(node => {
+        const el = document.createElement('div');
+        const hasChildren = (node.children || []).length > 0;
+        const isCollapsed = state.collapsed.has(node.id);
+        const isMatch = query && `${node.name} ${node.meta || ''} ${node.summary || ''}`.toLowerCase().includes(query);
+        el.className = `node-card type-${node.type || 'data'} ${state.selectedId === node.id ? 'active' : ''} ${isCollapsed ? 'collapsed' : ''} ${isMatch ? 'match' : ''}`;
+        el.style.left = `${node.x}px`;
+        el.style.top = `${node.y}px`;
+        el.innerHTML = `<span class="name">${escapeHtml(node.name)}</span><span class="meta">${escapeHtml(node.meta || '')}</span>`;
+        el.onclick = () => {
+          state.selectedId = node.id;
+          renderDetail();
+          drawNodes();
+          drawLinks();
+        };
+        if (hasChildren) {
+          const toggle = document.createElement('button');
+          toggle.className = 'toggle';
+          toggle.textContent = isCollapsed ? '+' : '-';
+          toggle.title = isCollapsed ? '展开子节点' : '收起子节点';
+          toggle.onclick = (event) => {
+            event.stopPropagation();
+            if (state.collapsed.has(node.id)) state.collapsed.delete(node.id);
+            else state.collapsed.add(node.id);
+            renderMapOnly();
+          };
+          el.appendChild(toggle);
+        }
+        nodesEl.appendChild(el);
+      });
+    }
+
+    function renderDetail() {
+      const node = state.nodeMap.get(state.selectedId);
+      if (!node) {
+        detailEl.innerHTML = '<div class="empty">点击任意节点查看详情。</div>';
+        return;
+      }
+
+      const blocks = [
+        ['职责', node.summary ? [node.summary] : []],
+        ['能做什么', node.actions],
+        ['页面控件', node.controls],
+        ['操作步骤', node.steps],
+        ['输入', node.inputs],
+        ['输出', node.outputs],
+        ['前端交互', node.frontend],
+        ['后端服务', node.backend],
+        ['关键数据', node.data],
+        ['关联 Skill / 规则', node.skills],
+        ['关联模型 / 工作流', node.models],
+        ['接口 / Command', node.commands],
+        ['注意事项', node.notes]
+      ].filter(([, items]) => items && items.length);
+
+      detailEl.innerHTML = `
+        <div class="detail-head">
+          <span class="detail-type">${escapeHtml(typeLabel(node.type))}</span>
+          <h2 class="detail-title">${escapeHtml(node.name)}</h2>
+          <p class="detail-summary">${escapeHtml(node.meta || '')}</p>
+          <div class="mini-actions">
+            <button id="focusNode">定位节点</button>
+            ${(node.children || []).length ? '<button id="toggleNode">展开/收起</button>' : ''}
+          </div>
+        </div>
+        <div class="detail-body">
+          <div class="info-grid">
+            ${blocks.map(([title, items]) => `
+              <div class="info-card">
+                <h3>${escapeHtml(title)}</h3>
+                ${title === '操作步骤'
+                  ? `<ol class="detail-steps">${items.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ol>`
+                  : `<ul>${items.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`}
+              </div>
+            `).join('')}
+            ${node.fields ? `
+              <div class="info-card">
+                <h3>字段 / 配置项</h3>
+                <div class="detail-section">
+                  ${Object.entries(node.fields).map(([key, value]) => `
+                    <div class="detail-kv"><b>${escapeHtml(key)}</b><span>${escapeHtml(value)}</span></div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+            ${node.example ? `<pre class="code">${escapeHtml(node.example)}</pre>` : ''}
+          </div>
+        </div>
+      `;
+
+      const focusBtn = document.getElementById('focusNode');
+      if (focusBtn) focusBtn.onclick = () => focusSelected();
+      const toggleBtn = document.getElementById('toggleNode');
+      if (toggleBtn) {
+        toggleBtn.onclick = () => {
+          if (state.collapsed.has(node.id)) state.collapsed.delete(node.id);
+          else state.collapsed.add(node.id);
+          renderMapOnly();
+        };
+      }
+    }
+
+    function renderQuickList() {
+      const root = views[state.viewKey].root;
+      const all = flatten(root, 0, null, []);
+      const important = all.filter(n => n.depth <= 1 || ['ModelInputPlanner', '视频包体系', 'Skill Registry', '多模型适配体系', 'StoryboardItem'].includes(n.name)).slice(0, 16);
+      quickListEl.innerHTML = '';
+      important.forEach(node => {
+        const btn = document.createElement('button');
+        btn.className = 'quick-link';
+        btn.textContent = node.name;
+        btn.onclick = () => {
+          expandAncestors(node.id);
+          state.selectedId = node.id;
+          renderMapOnly();
+          renderDetail();
+          focusSelected();
+        };
+        quickListEl.appendChild(btn);
+      });
+    }
+
+    function expandAncestors(id) {
+      let node = state.nodeMap.get(id);
+      while (node && node.parent) {
+        state.collapsed.delete(node.parent);
+        node = state.nodeMap.get(node.parent);
+      }
+    }
+
+    function focusSelected() {
+      const node = state.visibleNodes.find(n => n.id === state.selectedId);
+      if (!node) return;
+      canvasWrap.scrollTo({
+        left: Math.max(0, node.x * state.zoom - canvasWrap.clientWidth / 2 + 120),
+        top: Math.max(0, node.y * state.zoom - canvasWrap.clientHeight / 2 + 80),
+        behavior: 'smooth'
+      });
+    }
+
+    function renderMapOnly() {
+      layoutTree();
+      drawLinks();
+      drawNodes();
+      canvas.style.transform = `scale(${state.zoom})`;
+      document.getElementById('zoomReset').textContent = `${Math.round(state.zoom * 100)}%`;
+    }
+
+    function render() {
+      initTabs();
+      renderQuickList();
+      renderMapOnly();
+      renderDetail();
+      setTimeout(focusSelected, 60);
+    }
+
+    function setZoom(next) {
+      state.zoom = Math.max(.55, Math.min(1.45, next));
+      renderMapOnly();
+    }
+
+    function typeLabel(type) {
+      return {
+        root: '根节点',
+        core: '项目核心',
+        flow: '流程 / 工作台',
+        model: '模型 / Provider',
+        data: '数据 / 服务',
+        risk: '边界 / 风险'
+      }[type] || '节点';
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    document.getElementById('expandAll').onclick = () => {
+      state.collapsed.clear();
+      renderMapOnly();
+    };
+
+    document.getElementById('collapseAll').onclick = () => {
+      state.collapsed.clear();
+      const root = views[state.viewKey].root;
+      flatten(root, 0, null, []).forEach(node => {
+        if (node.depth >= 1 && (node.children || []).length) state.collapsed.add(node.id);
+      });
+      renderMapOnly();
+    };
+
+    document.getElementById('zoomIn').onclick = () => setZoom(state.zoom + .1);
+    document.getElementById('zoomOut').onclick = () => setZoom(state.zoom - .1);
+    document.getElementById('zoomReset').onclick = () => setZoom(1);
+    searchEl.oninput = () => {
+      const query = searchEl.value.trim().toLowerCase();
+      if (query) {
+        const found = [...state.nodeMap.values()].find(node => `${node.name} ${node.meta || ''} ${node.summary || ''}`.toLowerCase().includes(query));
+        if (found) {
+          expandAncestors(found.id);
+          state.selectedId = found.id;
+        }
+      }
+      renderMapOnly();
+      renderDetail();
+      if (query) setTimeout(focusSelected, 40);
+    };
+
+    render();
+  </script>
+</body>
+</html>
