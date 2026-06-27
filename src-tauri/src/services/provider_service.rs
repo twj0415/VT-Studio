@@ -33,7 +33,7 @@ impl<'a> ProviderManager<'a> {
         token: &CancellationToken,
     ) -> Result<LlmChatResponse, TaskError> {
         let provider = self.prepare_provider(&request.context, "llm", None, token)?;
-        DummyProviderAdapter::new(provider).call_llm(request, token)
+        ProviderAdapterPlaceholder::new(provider).call_llm(request, token)
     }
 
     pub fn generate_image(
@@ -54,7 +54,7 @@ impl<'a> ProviderManager<'a> {
             }),
             token,
         )?;
-        DummyProviderAdapter::new(provider).generate_image(request, token)
+        ProviderAdapterPlaceholder::new(provider).generate_image(request, token)
     }
 
     pub fn generate_video(
@@ -75,7 +75,7 @@ impl<'a> ProviderManager<'a> {
             }),
             token,
         )?;
-        DummyProviderAdapter::new(provider).generate_video(request, token)
+        ProviderAdapterPlaceholder::new(provider).generate_video(request, token)
     }
 
     pub fn generate_tts(
@@ -84,7 +84,7 @@ impl<'a> ProviderManager<'a> {
         token: &CancellationToken,
     ) -> Result<TtsProviderResponse, TaskError> {
         let provider = self.prepare_provider(&request.context, "tts", None, token)?;
-        DummyProviderAdapter::new(provider).generate_tts(request, token)
+        ProviderAdapterPlaceholder::new(provider).generate_tts(request, token)
     }
 
     pub fn analyze_asset(
@@ -93,7 +93,7 @@ impl<'a> ProviderManager<'a> {
         token: &CancellationToken,
     ) -> Result<VlmAnalyzeResponse, TaskError> {
         let provider = self.prepare_provider(&request.context, "vlm", None, token)?;
-        DummyProviderAdapter::new(provider).analyze_asset(request, token)
+        ProviderAdapterPlaceholder::new(provider).analyze_asset(request, token)
     }
 
     pub fn run_workflow(
@@ -117,7 +117,7 @@ impl<'a> ProviderManager<'a> {
             &request.workflow_vendor,
             &request.context,
         )?;
-        DummyProviderAdapter::new(provider).run_workflow(request, token)
+        ProviderAdapterPlaceholder::new(provider).run_workflow(request, token)
     }
 
     pub fn dry_run(
@@ -245,7 +245,7 @@ impl<'a> ProviderManager<'a> {
         if request.simulate_failure.unwrap_or(false) {
             return Err(provider_error(
                 "provider.server_error",
-                "Dummy provider simulated failure.",
+                "Provider test simulated failure.",
                 &context,
                 Some(json!({ "mode": test_mode, "providerId": request.provider_id })),
             ));
@@ -338,10 +338,14 @@ impl<'a> ProviderManager<'a> {
                 let response = self.run_workflow(
                     WorkflowProviderRequest {
                         context: context.clone(),
-                        workflow_preset_id: request
-                            .workflow_preset_id
-                            .clone()
-                            .unwrap_or_else(|| "dummy_workflow".to_string()),
+                        workflow_preset_id: request.workflow_preset_id.clone().ok_or_else(|| {
+                            provider_error(
+                                "workflow.preset_required",
+                                "workflow provider tests require workflow_preset_id.",
+                                &context,
+                                Some(json!({ "providerKind": request.provider_kind })),
+                            )
+                        })?,
                         workflow_vendor: "comfyui".to_string(),
                         params: json!({ "mode": test_mode.as_str() }),
                         output_path: format!("{output_prefix}/provider/workflow-output.json"),
@@ -374,10 +378,9 @@ impl<'a> ProviderManager<'a> {
             provider_kind: request.provider_kind,
             status: "succeeded".to_string(),
             message: if test_mode == "real_generate" {
-                "Dummy provider real_generate test succeeded without external network calls."
-                    .to_string()
+                "Provider real_generate test completed.".to_string()
             } else {
-                "Dummy provider dry_run succeeded without external network calls.".to_string()
+                "Provider dry_run completed.".to_string()
             },
             output_summary,
             billable: false,
@@ -482,10 +485,12 @@ impl<'a> ProviderManager<'a> {
 
         Ok(ResolvedProvider {
             provider_id: provider.provider_id,
-            vendor: provider.vendor,
+            vendor: provider.vendor.clone(),
             kind: provider.kind,
             display_name: provider.display_name,
             auth_type: provider.auth_type,
+            adapter: read_model_string(&provider.config_json, &["adapter"])
+                .unwrap_or_else(|| provider.vendor.clone()),
             has_secret,
             model: resolved_model,
         })
@@ -499,6 +504,7 @@ struct ResolvedProvider {
     kind: String,
     display_name: String,
     auth_type: String,
+    adapter: String,
     has_secret: bool,
     model: Option<ResolvedProviderModel>,
 }
@@ -530,11 +536,11 @@ enum ProviderRequestValidation<'a> {
     },
 }
 
-struct DummyProviderAdapter {
+struct ProviderAdapterPlaceholder {
     provider: ResolvedProvider,
 }
 
-impl DummyProviderAdapter {
+impl ProviderAdapterPlaceholder {
     fn new(provider: ResolvedProvider) -> Self {
         Self { provider }
     }
@@ -544,9 +550,10 @@ impl DummyProviderAdapter {
         request: LlmChatRequest,
         token: &CancellationToken,
     ) -> Result<LlmChatResponse, TaskError> {
+        self.reject_unimplemented_adapter("llm", &request.context)?;
         self.check(token, &request.context)?;
         Ok(LlmChatResponse {
-            content: format!("dummy llm response from {}", self.provider.display_name),
+            content: format!("unimplemented llm adapter for {}", self.provider.display_name),
             parsed_json: None,
             usage: Some(json!({ "promptTokens": 0, "completionTokens": 0, "totalTokens": 0 })),
             raw_response_summary: Some(self.summary("llm")),
@@ -558,6 +565,7 @@ impl DummyProviderAdapter {
         request: ImageProviderRequest,
         token: &CancellationToken,
     ) -> Result<ImageProviderResponse, TaskError> {
+        self.reject_unimplemented_adapter("image", &request.context)?;
         self.check(token, &request.context)?;
         Ok(ImageProviderResponse {
             image_path: request.output_path,
@@ -574,6 +582,7 @@ impl DummyProviderAdapter {
         request: VideoProviderRequest,
         token: &CancellationToken,
     ) -> Result<VideoProviderResponse, TaskError> {
+        self.reject_unimplemented_adapter("video", &request.context)?;
         self.check(token, &request.context)?;
         Ok(VideoProviderResponse {
             video_path: request.output_path,
@@ -591,6 +600,7 @@ impl DummyProviderAdapter {
         request: TtsProviderRequest,
         token: &CancellationToken,
     ) -> Result<TtsProviderResponse, TaskError> {
+        self.reject_unimplemented_adapter("tts", &request.context)?;
         self.check(token, &request.context)?;
         Ok(TtsProviderResponse {
             audio_path: request.output_path,
@@ -606,6 +616,7 @@ impl DummyProviderAdapter {
         request: VlmAnalyzeRequest,
         token: &CancellationToken,
     ) -> Result<VlmAnalyzeResponse, TaskError> {
+        self.reject_unimplemented_adapter("vlm", &request.context)?;
         self.check(token, &request.context)?;
         if is_style_reference_analysis_request(&request) {
             return Ok(VlmAnalyzeResponse {
@@ -618,13 +629,13 @@ impl DummyProviderAdapter {
                     "negative_prompt_suggestion": "low resolution, distorted geometry, watermark, logo, private details",
                     "warnings": ["style_reference.analysis_scope_only"]
                 })),
-                tags: vec!["dummy".to_string(), "style_reference_analysis".to_string()],
+                tags: vec!["style_reference_analysis".to_string()],
             });
         }
         Ok(VlmAnalyzeResponse {
-            description: "dummy visual analysis".to_string(),
+            description: "unimplemented visual analysis".to_string(),
             parsed_json: None,
-            tags: vec!["dummy".to_string()],
+            tags: vec![],
         })
     }
 
@@ -633,6 +644,7 @@ impl DummyProviderAdapter {
         request: WorkflowProviderRequest,
         token: &CancellationToken,
     ) -> Result<WorkflowProviderResponse, TaskError> {
+        self.reject_unimplemented_adapter("workflow", &request.context)?;
         self.check(token, &request.context)?;
         Ok(WorkflowProviderResponse {
             output_path: request.output_path,
@@ -651,9 +663,49 @@ impl DummyProviderAdapter {
         })
     }
 
+    fn reject_unimplemented_adapter(
+        &self,
+        capability: &str,
+        context: &ProviderRequestContext,
+    ) -> Result<(), TaskError> {
+        let adapter = self.provider.adapter.to_ascii_lowercase();
+        let vendor = self.provider.vendor.to_ascii_lowercase();
+        if adapter == "dummy"
+            || adapter == "mock"
+            || adapter == "controlled_fake"
+            || vendor == "dummy"
+            || vendor == "mock"
+            || vendor == "controlled_fake"
+        {
+            return Err(provider_error(
+                "provider.config_error",
+                "Runtime generation requires a real provider adapter; dummy/mock providers are not allowed.",
+                context,
+                Some(json!({
+                    "capability": capability,
+                    "providerId": self.provider.provider_id,
+                    "vendor": self.provider.vendor,
+                    "adapter": self.provider.adapter
+                })),
+            ));
+        }
+
+        Err(provider_error(
+            "provider.config_error",
+            "Provider adapter is not implemented yet; configure a real adapter before running generation.",
+            context,
+            Some(json!({
+                "capability": capability,
+                "providerId": self.provider.provider_id,
+                "vendor": self.provider.vendor,
+                "adapter": self.provider.adapter
+            })),
+        ))
+    }
+
     fn summary(&self, capability: &str) -> Value {
         json!({
-            "adapter": "dummy",
+            "adapter": "unimplemented",
             "capability": capability,
             "providerId": self.provider.provider_id,
             "vendor": self.provider.vendor,
@@ -1213,14 +1265,14 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
-    fn dummy_provider_dry_run_succeeds_without_network() {
+    fn provider_dry_run_requires_implemented_adapter() {
         let path = test_database_path("provider_dry_run_success");
         let database = Database::open(&path).expect("database should open");
         seed_provider(&database, "provider_dummy_image", "image", "none", None);
         let keyring = KeyringService::memory();
         let manager = ProviderManager::new(&database, &keyring);
 
-        let response = manager
+        let error = manager
             .dry_run(ProviderDryRunRequest {
                 provider_id: "provider_dummy_image".to_string(),
                 provider_kind: "image".to_string(),
@@ -1229,15 +1281,14 @@ mod tests {
                 simulate_failure: None,
                 simulate_cancelled: None,
             })
-            .expect("dry run should succeed");
+            .expect_err("dry run cannot fake provider success without a real adapter");
 
-        assert_eq!(response.status, "succeeded");
-        assert_eq!(response.output_summary["adapter"], "dummy");
+        assert_eq!(error.error_code, "provider.config_error");
         cleanup(path);
     }
 
     #[test]
-    fn generation_test_dry_run_covers_provider_kinds_without_external_network() {
+    fn generation_test_dry_run_rejects_unimplemented_provider_kinds() {
         let path = test_database_path("provider_generation_test_kinds");
         let database = Database::open(&path).expect("database should open");
         seed_provider(&database, "provider_dummy_llm", "llm", "none", None);
@@ -1255,7 +1306,7 @@ mod tests {
             ("provider_dummy_tts", "tts"),
             ("provider_dummy_vlm", "vlm"),
         ] {
-            let response = manager
+            let error = manager
                 .generation_test(ProviderGenerationTestRequest {
                     provider_id: provider_id.to_string(),
                     provider_kind: provider_kind.to_string(),
@@ -1267,12 +1318,9 @@ mod tests {
                     simulate_failure: None,
                     simulate_cancelled: None,
                 })
-                .expect("dry_run test should pass");
+                .expect_err("dry_run test cannot fake provider output");
 
-            assert_eq!(response.test_mode, "dry_run");
-            assert_eq!(response.status, "succeeded");
-            assert!(!response.billable);
-            assert_eq!(response.output_summary["externalNetwork"], false);
+            assert_eq!(error.error_code, "provider.config_error");
         }
 
         cleanup(path);
@@ -1335,13 +1383,9 @@ mod tests {
                 simulate_failure: None,
                 simulate_cancelled: None,
             })
-            .expect("confirmed dummy real_generate should pass");
+            .expect_err("confirmed real_generate cannot fake provider output");
 
-        assert_eq!(confirmed.test_mode, "real_generate");
-        assert!(confirmed.real_generate_confirmed);
-        assert!(!confirmed.billable);
-        assert_eq!(confirmed.output_summary["billable"], false);
-        assert_eq!(confirmed.output_summary["externalNetwork"], false);
+        assert_eq!(confirmed.error_code, "provider.config_error");
         cleanup(path);
     }
 
@@ -1401,9 +1445,8 @@ mod tests {
                 simulate_failure: None,
                 simulate_cancelled: None,
             })
-            .expect("confirmed video workflow real_generate should pass");
-        assert_eq!(confirmed.status, "succeeded");
-        assert!(!confirmed.billable);
+            .expect_err("confirmed video workflow cannot fake provider output");
+        assert_eq!(confirmed.error_code, "provider.config_error");
         cleanup(path);
     }
 
@@ -1429,7 +1472,7 @@ mod tests {
             .expect("secret should save");
         let manager = ProviderManager::new(&database, &keyring);
 
-        let response = manager
+        let error = manager
             .generation_test(ProviderGenerationTestRequest {
                 provider_id: "provider_dummy_llm".to_string(),
                 provider_kind: "llm".to_string(),
@@ -1441,9 +1484,9 @@ mod tests {
                 simulate_failure: None,
                 simulate_cancelled: None,
             })
-            .expect("dry_run should pass with keyring secret");
+            .expect_err("dry_run cannot fake provider output");
 
-        let serialized = serde_json::to_string(&response).expect("response should serialize");
+        let serialized = format!("{error:?}");
         assert!(!serialized.contains("sk-test-secret-should-not-leak"));
         assert!(!serialized.contains("Authorization"));
         assert!(!serialized.contains("Bearer"));
@@ -1684,7 +1727,7 @@ mod tests {
         let keyring = KeyringService::memory();
         let manager = ProviderManager::new(&database, &keyring);
 
-        let success = manager
+        let adapter_missing = manager
             .dry_run(ProviderDryRunRequest {
                 provider_id: "provider_comfyui".to_string(),
                 provider_kind: "workflow".to_string(),
@@ -1693,8 +1736,8 @@ mod tests {
                 simulate_failure: None,
                 simulate_cancelled: None,
             })
-            .expect("registered workflow should pass dry run");
-        assert_eq!(success.status, "succeeded");
+            .expect_err("registered workflow still requires an implemented adapter");
+        assert_eq!(adapter_missing.error_code, "provider.config_error");
 
         let missing = manager
             .dry_run(ProviderDryRunRequest {

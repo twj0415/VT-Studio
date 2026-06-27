@@ -45,6 +45,7 @@ import { useRouter } from 'vue-router'
 
 import WorkspaceStepBar from '@/features/workspace/WorkspaceStepBar.vue'
 import type { WorkspaceStepAccess, WorkspaceStepKey } from '@/features/workspace/steps'
+import { showAiToolsEntry } from '@/shared/runtime/productMode'
 
 const props = withDefaults(defineProps<{
   projectId: string
@@ -72,7 +73,7 @@ const rightClass = computed(() => props.rightWidthClass)
 
 const navEntries = [
   { path: '/', labelKey: 'nav.home', icon: '⌂' },
-  { path: '/ai-tools', labelKey: 'nav.aiTools', icon: 'AI' },
+  ...(showAiToolsEntry ? [{ path: '/ai-tools', labelKey: 'nav.aiTools', icon: 'AI' }] : []),
   { path: '/creative-resources', labelKey: 'nav.assets', icon: '▦' },
   { path: '/model-workflow', labelKey: 'nav.modelWorkflow', icon: '⌘' },
   { path: '/settings', labelKey: 'nav.settings', icon: '⚙' },

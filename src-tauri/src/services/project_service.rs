@@ -3,7 +3,8 @@ use crate::db::scene_repository::SceneRepository;
 use crate::db::Database;
 use crate::domain::project::{
     CreateProjectRequest, GenerateProjectCoverRequest, ListProjectsRequest, PageResult,
-    ProjectDetailDto, ProjectSummaryDto, ReplaceProjectCoverImageRequest,
+    ProjectDetailDto, ProjectSummaryDto, ReplaceProjectCoverImageRequest, UpdateProjectFields,
+    UpdateProjectLifecycleRequest, UpdateProjectRequest,
 };
 use crate::security::path_guard::PathGuard;
 use crate::services::storage_service::{FileAccessPolicy, FileBucket, StorageService};
@@ -65,8 +66,107 @@ pub fn get_project_detail(
         .ok_or_else(|| format!("Project not found: {project_id}"))
 }
 
-pub fn update_project(database: &Database, project_id: String) -> Result<ProjectDetailDto, String> {
-    get_project_detail(database, project_id)
+pub fn update_project(
+    database: &Database,
+    workspace_root: &Path,
+    request: UpdateProjectRequest,
+) -> Result<ProjectDetailDto, String> {
+    validate_project_id(&request.project_id)?;
+    let patch = request
+        .patch
+        .as_object()
+        .ok_or_else(|| "project patch must be an object.".to_string())?;
+    validate_project_patch_keys(patch)?;
+
+    let current = get_project_detail(database, request.project_id.clone())?;
+    let mut input_options = patch_value(
+        patch,
+        "inputOptions",
+        current.project.input_options.clone(),
+        "inputOptions",
+    )?;
+    if let Some(content_category) = patch_nullable_string(patch, "contentCategory")? {
+        input_options["contentCategory"] = serde_json::Value::String(content_category);
+    }
+
+    let mut fields = UpdateProjectFields {
+        title: patch_required_string(patch, "title", current.project.title.clone())?,
+        input_options,
+        source_text: patch_nullable_string(patch, "sourceText")?
+            .or_else(|| patch_nullable_string(patch, "topic").ok().flatten())
+            .or(current.project.source_text),
+        source_text_path: patch_nullable_string(patch, "sourceTextPath")?
+            .or(current.project.source_text_path),
+        aspect_ratio: patch_required_string(
+            patch,
+            "aspectRatio",
+            current.project.aspect_ratio.clone(),
+        )?,
+        target_scene_count: patch_u32(
+            patch,
+            "targetSceneCount",
+            current.project.target_scene_count,
+        )?,
+        segment_duration_seconds: patch_f64(
+            patch,
+            "segmentDurationSeconds",
+            current.project.segment_duration_seconds,
+        )?,
+        style_prompt: patch_nullable_string(patch, "stylePrompt")?.or(current.project.style_prompt),
+        active_pack_id: patch_nullable_string(patch, "activePackId")?
+            .or(current.project.active_pack_id),
+        rule_refs: patch_value(patch, "ruleRefs", current.project.rule_refs, "ruleRefs")?,
+        executable_refs: patch_value(
+            patch,
+            "executableRefs",
+            current.project.executable_refs,
+            "executableRefs",
+        )?,
+        cover_title: patch_nullable_string(patch, "coverTitle")?.or(current.project.cover_title),
+        tone: patch_nullable_string(patch, "tone")?.or(current.project.tone),
+        content_language: patch_required_string(
+            patch,
+            "contentLanguage",
+            current.project.content_language.clone(),
+        )?,
+    };
+
+    validate_update_project_fields(&fields)?;
+    if let Some(source_text_path) = fields.source_text_path.as_deref() {
+        validate_controlled_relative_path(source_text_path)?;
+    }
+    if let Some(pack_id) = patch_nullable_string(patch, "activePackId")?
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        let pack = video_pack_service::get_video_pack(
+            database,
+            workspace_root,
+            crate::domain::video_pack::VideoPackIdRequest {
+                pack_id: pack_id.to_string(),
+            },
+        )?;
+        if !patch.contains_key("ruleRefs") {
+            fields.rule_refs = pack.rule_refs;
+        }
+        if !patch.contains_key("executableRefs") {
+            fields.executable_refs = pack.recommended_executable_refs;
+        }
+    }
+    fields.rule_refs =
+        prompt_service::resolve_creative_rule_refs(workspace_root, &fields.rule_refs)?;
+
+    ProjectRepository::new(database).update_basic_fields(&request.project_id, fields)
+}
+
+pub fn update_project_lifecycle(
+    database: &Database,
+    request: UpdateProjectLifecycleRequest,
+) -> Result<ProjectDetailDto, String> {
+    validate_project_id(&request.project_id)?;
+    validate_project_lifecycle(&request.lifecycle)?;
+    ProjectRepository::new(database).update_lifecycle(&request.project_id, &request.lifecycle)
 }
 
 pub fn generate_project_cover(
@@ -192,11 +292,148 @@ fn validate_create_project_request(request: &CreateProjectRequest) -> Result<(),
     Ok(())
 }
 
+fn validate_update_project_fields(fields: &UpdateProjectFields) -> Result<(), String> {
+    if fields.title.trim().is_empty() {
+        return Err("title cannot be empty.".to_string());
+    }
+    if fields.target_scene_count == 0 {
+        return Err("target_scene_count must be greater than 0.".to_string());
+    }
+    if fields.segment_duration_seconds <= 0.0 {
+        return Err("segment_duration_seconds must be greater than 0.".to_string());
+    }
+    if fields.aspect_ratio.trim().is_empty() {
+        return Err("aspect_ratio cannot be empty.".to_string());
+    }
+    if fields.content_language.trim().is_empty() {
+        return Err("content_language cannot be empty.".to_string());
+    }
+    Ok(())
+}
+
+fn validate_project_patch_keys(
+    patch: &serde_json::Map<String, serde_json::Value>,
+) -> Result<(), String> {
+    for key in patch.keys() {
+        if matches!(
+            key.as_str(),
+            "lifecycle" | "projectLifecycle" | "project_lifecycle"
+        ) {
+            return Err("update_project cannot modify project lifecycle.".to_string());
+        }
+        if !matches!(
+            key.as_str(),
+            "title"
+                | "topic"
+                | "sourceText"
+                | "sourceTextPath"
+                | "inputOptions"
+                | "contentCategory"
+                | "aspectRatio"
+                | "targetSceneCount"
+                | "segmentDurationSeconds"
+                | "stylePrompt"
+                | "activePackId"
+                | "ruleRefs"
+                | "executableRefs"
+                | "coverTitle"
+                | "tone"
+                | "contentLanguage"
+        ) {
+            return Err(format!("Unsupported project patch field: {key}"));
+        }
+    }
+    Ok(())
+}
+
+fn patch_required_string(
+    patch: &serde_json::Map<String, serde_json::Value>,
+    key: &str,
+    current: String,
+) -> Result<String, String> {
+    let Some(value) = patch.get(key) else {
+        return Ok(current);
+    };
+    value
+        .as_str()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| format!("{key} must be a non-empty string."))
+}
+
+fn patch_nullable_string(
+    patch: &serde_json::Map<String, serde_json::Value>,
+    key: &str,
+) -> Result<Option<String>, String> {
+    let Some(value) = patch.get(key) else {
+        return Ok(None);
+    };
+    if value.is_null() {
+        return Ok(None);
+    }
+    value
+        .as_str()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .map(Some)
+        .ok_or_else(|| format!("{key} must be a string or null."))
+}
+
+fn patch_u32(
+    patch: &serde_json::Map<String, serde_json::Value>,
+    key: &str,
+    current: u32,
+) -> Result<u32, String> {
+    let Some(value) = patch.get(key) else {
+        return Ok(current);
+    };
+    value
+        .as_u64()
+        .and_then(|value| u32::try_from(value).ok())
+        .ok_or_else(|| format!("{key} must be a positive integer."))
+}
+
+fn patch_f64(
+    patch: &serde_json::Map<String, serde_json::Value>,
+    key: &str,
+    current: f64,
+) -> Result<f64, String> {
+    let Some(value) = patch.get(key) else {
+        return Ok(current);
+    };
+    value
+        .as_f64()
+        .ok_or_else(|| format!("{key} must be a number."))
+}
+
+fn patch_value(
+    patch: &serde_json::Map<String, serde_json::Value>,
+    key: &str,
+    current: serde_json::Value,
+    label: &str,
+) -> Result<serde_json::Value, String> {
+    let Some(value) = patch.get(key) else {
+        return Ok(current);
+    };
+    if !value.is_object() {
+        return Err(format!("{label} must be an object."));
+    }
+    Ok(value.clone())
+}
+
 fn validate_project_id(project_id: &str) -> Result<(), String> {
     if project_id.trim().is_empty() {
         Err("project_id is required.".to_string())
     } else {
         Ok(())
+    }
+}
+
+fn validate_project_lifecycle(lifecycle: &str) -> Result<(), String> {
+    if matches!(lifecycle, "draft" | "active" | "archived" | "deleted") {
+        Ok(())
+    } else {
+        Err(format!("Unsupported project lifecycle: {lifecycle}"))
     }
 }
 
@@ -366,12 +603,16 @@ fn validate_controlled_relative_path(path: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{create_project, generate_project_cover, replace_project_cover_image};
+    use super::{
+        create_project, generate_project_cover, replace_project_cover_image,
+        update_project_lifecycle,
+    };
     use crate::db::project_repository::ProjectRepository;
     use crate::db::scene_repository::{NewImageCandidateRecord, SceneRepository};
     use crate::db::Database;
     use crate::domain::project::{
         CreateProjectRequest, GenerateProjectCoverRequest, ReplaceProjectCoverImageRequest,
+        UpdateProjectLifecycleRequest, UpdateProjectRequest,
     };
     use crate::domain::scene::SceneDto;
     use serde_json::json;
@@ -583,6 +824,118 @@ mod tests {
         let error = create_project(&database, &workspace_root, request)
             .expect_err("paste generate should be rejected");
         assert!(error.contains("paste input_type must use fixed input_process_mode"));
+
+        cleanup(root);
+    }
+
+    #[test]
+    fn update_project_lifecycle_persists_and_list_excludes_deleted_by_default() {
+        let root = test_root("project_lifecycle");
+        let workspace_root = root.join("workspace");
+        let database = Database::open(root.join("app.sqlite3")).expect("database should open");
+        let detail = create_project(&database, &workspace_root, create_request("生命周期"))
+            .expect("project should be created");
+        let project_id = detail.project.project_id.clone();
+
+        let archived = update_project_lifecycle(
+            &database,
+            UpdateProjectLifecycleRequest {
+                project_id: project_id.clone(),
+                lifecycle: "archived".to_string(),
+            },
+        )
+        .expect("project should archive");
+        assert_eq!(archived.project.lifecycle, "archived");
+
+        let deleted = update_project_lifecycle(
+            &database,
+            UpdateProjectLifecycleRequest {
+                project_id: project_id.clone(),
+                lifecycle: "deleted".to_string(),
+            },
+        )
+        .expect("project should soft delete");
+        assert_eq!(deleted.project.lifecycle, "deleted");
+
+        let visible = ProjectRepository::new(&database)
+            .list(crate::domain::project::ListProjectsRequest {
+                page: 1,
+                page_size: 20,
+                keyword: None,
+                lifecycle: None,
+                sort_by: None,
+                sort_order: None,
+            })
+            .expect("projects should list");
+        assert!(visible
+            .items
+            .iter()
+            .all(|project| project.project_id != project_id));
+
+        let deleted_list = ProjectRepository::new(&database)
+            .list(crate::domain::project::ListProjectsRequest {
+                page: 1,
+                page_size: 20,
+                keyword: None,
+                lifecycle: Some("deleted".to_string()),
+                sort_by: None,
+                sort_order: None,
+            })
+            .expect("deleted projects should list");
+        assert_eq!(deleted_list.items.len(), 1);
+        assert_eq!(deleted_list.items[0].project_id, project_id);
+
+        cleanup(root);
+    }
+
+    #[test]
+    fn update_project_persists_basic_fields_without_lifecycle() {
+        let root = test_root("project_update_basic");
+        let workspace_root = root.join("workspace");
+        let database = Database::open(root.join("app.sqlite3")).expect("database should open");
+        let detail = create_project(&database, &workspace_root, create_request("更新前"))
+            .expect("project should be created");
+        let project_id = detail.project.project_id.clone();
+
+        let updated = super::update_project(
+            &database,
+            &workspace_root,
+            UpdateProjectRequest {
+                project_id: project_id.clone(),
+                patch: json!({
+                    "title": "更新后的作品",
+                    "targetSceneCount": 12,
+                    "segmentDurationSeconds": 5,
+                    "aspectRatio": "16:9",
+                    "contentLanguage": "en-US",
+                    "stylePrompt": "cinematic",
+                    "inputOptions": { "confirmedSegments": [{ "sourceText": "A", "narrationText": "B" }] }
+                }),
+            },
+        )
+        .expect("project should update");
+
+        assert_eq!(updated.project.title, "更新后的作品");
+        assert_eq!(updated.project.target_scene_count, 12);
+        assert_eq!(updated.project.segment_duration_seconds, 5.0);
+        assert_eq!(updated.project.aspect_ratio, "16:9");
+        assert_eq!(updated.project.content_language, "en-US");
+        assert_eq!(updated.project.lifecycle, "draft");
+        assert_eq!(
+            updated.project.input_options["confirmedSegments"][0]["narrationText"],
+            "B"
+        );
+
+        let error = super::update_project(
+            &database,
+            &workspace_root,
+            UpdateProjectRequest {
+                project_id,
+                patch: json!({ "lifecycle": "deleted" }),
+            },
+        )
+        .expect_err("project lifecycle cannot be updated through update_project");
+        assert!(error.contains("cannot modify project lifecycle"));
 
         cleanup(root);
     }

@@ -3,7 +3,7 @@
     <aside v-if="!isWorkspaceContext" class="rail">
       <div class="logo" @click="router.push('/')">V</div>
       <div class="ri" :class="{ active: route.name === 'home' || isProjectContext }" :data-tip="t('nav.home')" @click="router.push('/')" v-html="icons.home"></div>
-      <div class="ri" :class="{ active: route.name === 'ai-tools' }" :data-tip="t('nav.aiTools')" @click="router.push('/ai-tools')" v-html="icons.ai"></div>
+      <div v-if="showAiToolsEntry" class="ri" :class="{ active: route.name === 'ai-tools' }" :data-tip="t('nav.aiTools')" @click="router.push('/ai-tools')" v-html="icons.ai"></div>
       <div class="ri" :class="{ active: route.name === 'creative-resources' }" :data-tip="t('nav.assets')" @click="router.push('/creative-resources')" v-html="icons.assets"></div>
       <div class="ri" :class="{ active: route.name === 'model-workflow' }" :data-tip="t('nav.modelWorkflow')" @click="router.push('/model-workflow')" v-html="icons.workflow"></div>
       <div class="sp"></div>
@@ -20,6 +20,8 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+
+import { showAiToolsEntry } from '@/shared/runtime/productMode'
 
 const router = useRouter()
 const route = useRoute()

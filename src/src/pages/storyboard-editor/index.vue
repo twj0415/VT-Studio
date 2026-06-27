@@ -1,11 +1,11 @@
 <template>
   <section class="view h-full min-w-0 overflow-hidden bg-page text-primary">
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
-      <WorkspaceHeader :project-id="projectId" :project-title="projectTitle" current-step="storyboard" :access="workspaceAccess" back-to="/" :badge-label="isMockStoryboard ? t('storyboard.mockBadge') : ''" right-width-class="w-[380px]" :usage="resourceUsage" @blocked="handleBlockedStep">
+      <WorkspaceHeader :project-id="projectId" :project-title="projectTitle" current-step="storyboard" :access="workspaceAccess" back-to="/" right-width-class="w-[380px]" :usage="resourceUsage" @blocked="handleBlockedStep">
         <template #actions>
           <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm border border-border-strong px-vt-3 text-sm font-medium text-secondary transition hover:bg-card hover:text-primary disabled:cursor-not-allowed disabled:opacity-50" @click="handleSaveAll" :disabled="dirtyItemIds.size === 0 || isSavingAll">{{ t('storyboard.saveAll') }}</button>
           <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm border border-border-strong px-vt-3 text-sm font-medium text-secondary transition hover:bg-card hover:text-primary disabled:cursor-not-allowed disabled:opacity-50" @click="handleApprove" :disabled="isSavingAll">{{ t('storyboard.approveStoryboard') }}</button>
-          <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm bg-accent px-vt-4 text-sm font-semibold text-accent-ink transition hover:brightness-110" @click="handleEnterImage">{{ t('storyboard.enterImage') }}</button>
+          <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm bg-accent px-vt-4 text-sm font-semibold text-accent-ink transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!canEnterImageStep" :title="enterImageTitle" @click="handleEnterImage">{{ t('storyboard.enterImage') }}</button>
         </template>
       </WorkspaceHeader>
 
@@ -180,8 +180,14 @@ const splitModes = computed<Array<{ label: string; value: StoryboardSplitMode }>
 const projectTitle = computed(() => (projectStore.currentProject?.project.projectId === projectId ? projectStore.currentProject.project.title : projectId))
 const storyboardItems = computed(() => storyboardStore.storyboard?.items ?? [])
 const pendingMergeItem = computed(() => storyboardItems.value.find((item) => item.itemId === pendingMergeItemId.value) ?? null)
-const isMockStoryboard = computed(() => storyboardItems.value.some((item) => item.visualDescription.startsWith('MOCK') || item.imagePrompt.startsWith('MOCK')))
 const workspaceAccess = computed(() => getWorkspaceStepAccess(storyboardItems.value, storyboardStore.storyboard?.reviewStatus))
+const firstImageEntryIssue = computed(() => validateStoryboardItemsForImageGeneration(storyboardItems.value)[0] ?? null)
+const canEnterImageStep = computed(() => !firstImageEntryIssue.value && storyboardStore.storyboard?.reviewStatus === 'succeeded')
+const enterImageTitle = computed(() => {
+  if (firstImageEntryIssue.value) return formatImageEntryIssue(firstImageEntryIssue.value)
+  if (storyboardStore.storyboard?.reviewStatus !== 'succeeded') return t('storyboard.validation.storyboardNotApproved')
+  return t('storyboard.enterImage')
+})
 const characterOptions = computed(() => characterBibles.value.map((character) => ({ label: `${character.name} · ${character.characterId}`, value: character.characterId })))
 const locationOptions = computed(() => locationBibles.value.map((location) => ({ label: `${location.name} · ${location.locationId}`, value: location.locationId })))
 const resourceUsage = computed(() => ({
@@ -451,8 +457,12 @@ async function handleEnterImage() {
 }
 
 function showFirstIssue(issue: { index: number; fields: StoryboardImageEntryField[] }) {
+  message.error(formatImageEntryIssue(issue))
+}
+
+function formatImageEntryIssue(issue: { index: number; fields: StoryboardImageEntryField[] }) {
   const fields = issue.fields.map((field) => t(`storyboard.validation.fields.${field}`)).join('、')
-  message.error(t('storyboard.validation.enterImageBlocked', { index: issue.index, fields }))
+  return t('storyboard.validation.enterImageBlocked', { index: issue.index, fields })
 }
 
 function createRegenerateRequest(): RegenerateStoryboardRequest {

@@ -1,12 +1,12 @@
 <template>
   <section class="view h-full min-w-0 overflow-hidden bg-page text-primary">
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
-      <WorkspaceHeader :project-id="projectId" :project-title="projectTitle" current-step="image" :access="workspaceAccess" :back-to="`/projects/${projectId}/workspace/storyboard`" :badge-label="isMockImageFlow ? t('imageGeneration.mockBadge') : ''" right-width-class="w-[500px]" :usage="resourceUsage" @blocked="handleBlockedStep">
+      <WorkspaceHeader :project-id="projectId" :project-title="projectTitle" current-step="image" :access="workspaceAccess" :back-to="`/projects/${projectId}/workspace/storyboard`" right-width-class="w-[500px]" :usage="resourceUsage" @blocked="handleBlockedStep">
         <template #actions>
           <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm border border-border-strong px-vt-3 text-sm font-medium text-secondary transition hover:bg-card hover:text-primary disabled:cursor-not-allowed disabled:opacity-50" :disabled="dirtyItemIds.size === 0 || isSavingAll" @click="handleSaveAll">{{ t('imageGeneration.saveAll') }}</button>
           <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm border border-border-strong px-vt-3 text-sm font-medium text-secondary transition hover:bg-card hover:text-primary disabled:cursor-not-allowed disabled:opacity-50" :disabled="selectedImageKind !== 'storyboard_image' || isBulkGenerating" @click="handleGenerateMissing">{{ t('imageGeneration.generateMissing') }}</button>
           <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm border border-border-strong px-vt-3 text-sm font-medium text-secondary transition hover:bg-card hover:text-primary disabled:cursor-not-allowed disabled:opacity-50" :disabled="selectedImageKind !== 'storyboard_image' || isBulkGenerating" @click="handleGenerateAll">{{ t('imageGeneration.generateAll') }}</button>
-          <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm bg-accent px-vt-4 text-sm font-semibold text-accent-ink transition hover:brightness-110" @click="handleEnterVideo">{{ t('imageGeneration.enterVideo') }}</button>
+          <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm bg-accent px-vt-4 text-sm font-semibold text-accent-ink transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!canEnterVideoStep" :title="enterVideoTitle" @click="handleEnterVideo">{{ t('imageGeneration.enterVideo') }}</button>
         </template>
       </WorkspaceHeader>
 
@@ -118,7 +118,7 @@
                   <td class="border-b border-border px-vt-2 py-vt-2">
                     <div v-if="item.imageCandidates.length > 0" class="grid h-[116px] grid-cols-2 gap-vt-1 overflow-y-auto">
                       <div v-for="(candidate, candidateIndex) in sortedImageCandidates(item)" :key="candidate.imageId" class="grid min-h-[54px] grid-cols-[40px_1fr] items-center gap-vt-2 rounded-vt-sm border px-vt-2 py-vt-1 text-left text-[11px] leading-4 transition" :class="candidateButtonClass(item, candidate)">
-                        <span class="grid h-9 w-10 place-items-center rounded-vt-sm border border-border text-[9px] font-semibold uppercase text-primary" :class="candidatePreviewClass(candidate, candidateIndex)">{{ t('imageGeneration.mockShort') }}</span>
+                        <span class="grid h-9 w-10 place-items-center rounded-vt-sm border border-border text-[9px] font-semibold uppercase text-primary" :class="candidatePreviewClass(candidate, candidateIndex)">{{ candidatePreviewLabel(candidate, candidateIndex) }}</span>
                         <span class="min-w-0">
                           <span class="block truncate font-semibold">{{ t('imageGeneration.candidateVariant', { index: candidateVariantIndex(candidate, candidateIndex) }) }}</span>
                           <span class="block truncate text-muted">{{ t('imageGeneration.revisionLabel', { revision: candidateRevision(candidate) }) }} · {{ candidateFreshnessLabel(item, candidate) }}</span>
@@ -305,7 +305,9 @@ const storyboardCharacterOptions = computed(() => characterBibles.value.map((cha
 const storyboardLocationOptions = computed(() => locationBibles.value.map((location) => ({ label: `${location.name} · ${location.locationId}`, value: location.locationId })))
 const workspaceAccess = computed(() => getWorkspaceStepAccess(storyboardItems.value, storyboardStore.storyboard?.reviewStatus))
 const projectTitle = computed(() => (projectStore.currentProject?.project.projectId === projectId ? projectStore.currentProject.project.title : projectId))
-const isMockImageFlow = computed(() => storyboardItems.value.some((item) => item.imagePrompt.startsWith('MOCK') || item.imageCandidates.some((candidate) => candidate.providerModelId.startsWith('mock'))))
+const firstVideoEntryIssue = computed(() => validateStoryboardItemsForVideoGeneration(storyboardItems.value)[0] ?? null)
+const canEnterVideoStep = computed(() => !firstVideoEntryIssue.value)
+const enterVideoTitle = computed(() => (firstVideoEntryIssue.value ? formatVideoEntryIssue(firstVideoEntryIssue.value) : t('imageGeneration.enterVideo')))
 const imageResetCount = computed(() => storyboardItems.value.filter((item) => imageResetRecord(item)).length)
 const bulkImageLockedCount = computed(() => storyboardItems.value.filter(isStoryboardItemLockedForBulkImageGeneration).length)
 const resourceUsage = computed(() => ({
@@ -773,6 +775,10 @@ function candidateVariantIndex(candidate: ImageCandidateDto, fallbackIndex: numb
   return typeof variantIndex === 'number' && Number.isFinite(variantIndex) ? variantIndex : fallbackIndex + 1
 }
 
+function candidatePreviewLabel(candidate: ImageCandidateDto, fallbackIndex: number) {
+  return `#${String(candidateVariantIndex(candidate, fallbackIndex)).padStart(2, '0')}`
+}
+
 function candidateButtonClass(item: StoryboardItemDto, candidate: ImageCandidateDto) {
   return isCandidateSelected(item, candidate) ? 'border-accent-line bg-accent-soft text-accent' : 'border-border bg-page text-secondary hover:border-border-strong hover:text-primary'
 }
@@ -891,8 +897,12 @@ function shortId(value?: string) {
 }
 
 function showFirstVideoIssue(issue: { index: number; fields: StoryboardVideoEntryField[] }) {
+  message.error(formatVideoEntryIssue(issue))
+}
+
+function formatVideoEntryIssue(issue: { index: number; fields: StoryboardVideoEntryField[] }) {
   const fields = issue.fields.map((field) => t(`imageGeneration.validation.fields.${field}`)).join('、')
-  message.error(t('imageGeneration.validation.enterVideoBlocked', { index: issue.index, fields }))
+  return t('imageGeneration.validation.enterVideoBlocked', { index: issue.index, fields })
 }
 
 function handleBlockedStep(step: WorkspaceStepKey) {

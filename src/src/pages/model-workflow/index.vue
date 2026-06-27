@@ -720,6 +720,10 @@ const isEditingWorkflow = computed(() => Boolean(selectedWorkflow.value))
 const selectedExecutableOption = computed(() => executableOptions.value.find((option) => option.optionId === selectedExecutableOptionId.value) ?? null)
 const selectedWorkflowIsVideo = computed(() => selectedWorkflow.value ? workflowPresetIsVideo(selectedWorkflow.value) : false)
 const selectedExecutableOptionIsVideo = computed(() => selectedExecutableOption.value ? executableOptionIsVideo(selectedExecutableOption.value) : false)
+const selectedWorkflowPresetIdForProviderTest = computed(() => {
+  if (providerForm.providerKind !== 'workflow') return undefined
+  return selectedWorkflow.value?.workflowPresetId
+})
 const currentSecretStatus = computed(() => {
   const keyAlias = providerForm.keyAlias
   if (!keyAlias) return t('modelWorkflow.secret.noAlias')
@@ -997,7 +1001,7 @@ async function handleDryRun(simulateFailure: boolean) {
     {
       providerId: selectedProviderId.value,
       providerKind: providerForm.providerKind,
-      workflowPresetId: providerForm.providerKind === 'workflow' ? 'dummy_workflow' : undefined,
+      workflowPresetId: selectedWorkflowPresetIdForProviderTest.value,
       testMode: 'dry_run',
       simulateFailure,
     },
@@ -1012,7 +1016,7 @@ async function handleCancelledDryRun() {
     {
       providerId: selectedProviderId.value,
       providerKind: providerForm.providerKind,
-      workflowPresetId: providerForm.providerKind === 'workflow' ? 'dummy_workflow' : undefined,
+      workflowPresetId: selectedWorkflowPresetIdForProviderTest.value,
       testMode: 'dry_run',
       simulateCancelled: true,
     },
@@ -1027,7 +1031,7 @@ async function handleProviderRealGenerate() {
     createRealGenerateRequest({
       providerId: selectedProviderId.value,
       providerKind: providerForm.providerKind,
-      workflowPresetId: providerForm.providerKind === 'workflow' ? 'dummy_workflow' : undefined,
+      workflowPresetId: selectedWorkflowPresetIdForProviderTest.value,
     }),
     isRealGenerateTesting,
   )
@@ -1348,14 +1352,14 @@ function parseStringRecord(raw: string, errorText: string): Record<string, strin
 
 function createDefaultProviderForm(): ProviderFormState {
   return {
-    providerId: 'provider_dummy_image',
+    providerId: '',
     providerKind: 'image',
-    vendor: 'dummy',
-    displayName: 'Dummy image',
+    vendor: '',
+    displayName: '',
     baseUrl: '',
-    authType: 'none',
+    authType: 'api_key',
     keyAlias: undefined,
-    status: 'ready',
+    status: 'unconfigured',
     isEnabled: true,
   }
 }
@@ -1365,19 +1369,19 @@ function createDefaultModelForm(): ModelFormState {
   const providerKind = provider?.providerKind === 'workflow' || !provider ? 'image' : provider.providerKind
   const providerId = provider?.providerId ?? ''
   return {
-    modelId: providerId ? `${providerId}_model_image` : 'model_dummy_image',
+    modelId: '',
     providerId,
     providerKind,
-    vendor: provider?.vendor ?? 'dummy',
-    providerModelId: 'dummy/image-v1',
-    modelName: 'dummy-image-v1',
-    displayName: 'Dummy image model',
+    vendor: provider?.vendor ?? '',
+    providerModelId: '',
+    modelName: '',
+    displayName: '',
     abilityTypes: ['text_to_image'],
     inputModalities: ['text'],
     outputModalities: ['image'],
     featureFlags: ['aspect_ratio', 'resolution'],
     apiContractVerified: false,
-    status: 'ready',
+    status: 'unconfigured',
     isEnabled: true,
   }
 }

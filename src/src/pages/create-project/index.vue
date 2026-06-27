@@ -44,8 +44,40 @@
             <div v-if="form.inputType === 'paste'" class="flex flex-none flex-wrap items-center gap-vt-2 rounded-vt-sm border border-accent-line bg-accent-soft p-vt-3 text-xs text-secondary">
               <span class="font-medium text-accent">{{ t('createProject.fixedOriginalTitle') }}</span>
               <span>{{ t('createProject.fixedOriginalDesc') }}</span>
-              <span class="rounded-vt-sm border border-accent-line bg-page px-vt-2 py-vt-1 text-accent">{{ t('createProject.splitParagraph') }}</span>
+              <span class="rounded-vt-sm border border-accent-line bg-page px-vt-2 py-vt-1 text-accent">{{ splitModeLabel }}</span>
               <span class="rounded-vt-sm border border-border bg-page px-vt-2 py-vt-1 text-muted">{{ t('createProject.noAiRewrite') }}</span>
+            </div>
+
+            <div v-if="showSplitPreview" class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-vt-sm border border-border bg-page">
+              <div class="flex flex-none flex-wrap items-center gap-vt-2 border-b border-border px-vt-3 py-vt-2 text-xs">
+                <span class="font-semibold text-primary">{{ t('createProject.splitPreview.title') }}</span>
+                <span class="rounded-vt-sm border border-border bg-card px-vt-2 py-vt-1 text-muted">{{ t('createProject.splitPreview.count', { count: segmentDrafts.length }) }}</span>
+                <div class="ml-auto flex flex-wrap items-center gap-vt-1">
+                  <button v-for="mode in splitModeOptions" :key="mode.value" type="button" class="rounded-vt-sm border px-vt-2 py-vt-1 transition" :class="splitMode === mode.value ? 'border-accent-line bg-accent-soft text-accent' : 'border-border bg-card text-secondary hover:border-border-strong hover:text-primary'" @click="setSplitMode(mode.value)">
+                    {{ mode.label }}
+                  </button>
+                </div>
+              </div>
+              <div class="min-h-0 flex-1 overflow-y-auto p-vt-3">
+                <div v-if="longTextWarning" class="mb-vt-3 rounded-vt-sm border border-status-retrying/40 bg-status-retrying/10 px-vt-3 py-vt-2 text-xs leading-5 text-status-retrying">
+                  {{ t('createProject.splitPreview.longTextWarning', { count: sourceTextLength }) }}
+                </div>
+                <div v-if="segmentDrafts.length === 0" class="rounded-vt-sm border border-dashed border-border p-vt-5 text-center text-xs text-muted">
+                  {{ t('createProject.splitPreview.empty') }}
+                </div>
+                <div v-else class="grid gap-vt-2">
+                  <div v-for="(segment, index) in segmentDrafts" :key="segment.id" class="rounded-vt-sm border border-border bg-card p-vt-3">
+                    <div class="mb-vt-2 flex items-center gap-vt-2 text-xs">
+                      <span class="grid size-6 place-items-center rounded-vt-sm border border-border bg-page text-muted">#{{ index + 1 }}</span>
+                      <span class="text-muted">{{ t('createProject.splitPreview.segmentLength', { count: segment.text.length }) }}</span>
+                      <button type="button" class="ml-auto rounded-vt-sm border border-border px-vt-2 py-vt-1 text-secondary transition hover:bg-card-hover hover:text-primary" @click="splitSegment(index)">{{ t('createProject.splitPreview.split') }}</button>
+                      <button type="button" class="rounded-vt-sm border border-border px-vt-2 py-vt-1 text-secondary transition hover:bg-card-hover hover:text-primary disabled:cursor-not-allowed disabled:opacity-50" :disabled="index === 0" @click="mergeSegment(index)">{{ t('createProject.splitPreview.mergePrev') }}</button>
+                      <button type="button" class="rounded-vt-sm border border-border px-vt-2 py-vt-1 text-secondary transition hover:bg-card-hover hover:text-primary disabled:cursor-not-allowed disabled:opacity-50" :disabled="segmentDrafts.length <= 1" @click="removeSegment(index)">{{ t('createProject.splitPreview.remove') }}</button>
+                    </div>
+                    <n-input v-model:value="segment.text" class="inp" type="textarea" :autosize="{ minRows: 2, maxRows: 5 }" />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -138,7 +170,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { NButton, NInput, NInputNumber, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -151,6 +183,7 @@ import { useDictOptions } from '@/shared/dict/useDictOptions'
 import type { AspectRatio, ContentLanguage, InputProcessMode, InputType } from '@/shared/enums/generated'
 
 type CreateMode = 'text' | 'image' | 'video'
+type SplitMode = 'paragraph' | 'line' | 'sentence'
 
 interface CreateProjectForm {
   inputType: InputType
@@ -169,6 +202,11 @@ interface CreateModeOption {
   disabled: boolean
 }
 
+interface SegmentDraft {
+  id: string
+  text: string
+}
+
 const router = useRouter()
 const projectStore = useProjectStore()
 const message = useMessage()
@@ -180,6 +218,9 @@ const isLoadingPacks = ref(false)
 const videoPacks = ref<VideoPackDto[]>([])
 const durationOptions = [4, 6, 8] as const
 const textInputTypes: readonly InputType[] = ['topic', 'paste', 'article']
+const splitMode = ref<SplitMode>('paragraph')
+const segmentDrafts = ref<SegmentDraft[]>([])
+let segmentDraftCounter = 0
 
 const inputOptions = useDictOptions('inputType')
 const aspectRatioOptions = useDictOptions('aspectRatio')
@@ -208,7 +249,17 @@ const mainlineSteps = computed(() => [t('storyboard.steps.storyboard'), t('story
 const sourceText = computed(() => form.sourceText.trim())
 const sourceTextLength = computed(() => sourceText.value.length)
 const inputProcessMode = computed<InputProcessMode>(() => (form.inputType === 'paste' ? 'fixed' : 'generate'))
-const canCreate = computed(() => selectedMode.value === 'text' && sourceTextLength.value > 0 && !isCreating.value)
+const showSplitPreview = computed(() => form.inputType === 'paste' || form.inputType === 'article')
+const confirmedSegmentTexts = computed(() => segmentDrafts.value.map((segment) => segment.text.trim()).filter(Boolean))
+const confirmedSourceText = computed(() => (showSplitPreview.value ? confirmedSegmentTexts.value.join('\n\n') : sourceText.value))
+const canCreate = computed(() => selectedMode.value === 'text' && confirmedSourceText.value.length > 0 && !isCreating.value)
+const longTextWarning = computed(() => showSplitPreview.value && sourceTextLength.value >= 1200)
+const splitModeOptions = computed(() => [
+  { value: 'paragraph' as const, label: t('createProject.splitParagraph') },
+  { value: 'line' as const, label: t('createProject.splitLine') },
+  { value: 'sentence' as const, label: t('createProject.splitSentence') },
+])
+const splitModeLabel = computed(() => splitModeOptions.value.find((option) => option.value === splitMode.value)?.label ?? t('createProject.splitParagraph'))
 
 const inputLabel = computed(() => {
   if (form.inputType === 'paste') return t('createProject.inputLabels.paste')
@@ -219,6 +270,18 @@ const inputLabel = computed(() => {
 const inputPlaceholder = computed(() => (form.inputType === 'topic' ? t('createProject.inputPlaceholderTopic') : t('createProject.inputPlaceholderContent')))
 
 onMounted(loadVideoPacks)
+
+watch(
+  () => [form.sourceText, form.inputType, splitMode.value] as const,
+  () => {
+    if (!showSplitPreview.value) {
+      segmentDrafts.value = []
+      return
+    }
+    rebuildSegmentsFromSource()
+  },
+  { immediate: true },
+)
 
 function modePillClass(selected: boolean, disabled: boolean) {
   if (disabled) return 'cursor-not-allowed text-muted opacity-50'
@@ -243,6 +306,10 @@ function selectEntry(inputType: InputType) {
   if (form.activePackId && !selectablePacks.value.some((pack) => pack.packId === form.activePackId)) {
     form.activePackId = undefined
   }
+}
+
+function setSplitMode(mode: SplitMode) {
+  splitMode.value = mode
 }
 
 function setTargetSceneCount(value: number | null) {
@@ -278,8 +345,8 @@ function toCreateProjectRequest(): CreateProjectRequest {
     title: '',
     workflowType: 'image_to_video',
     inputType: form.inputType,
-    topic: form.inputType === 'topic' ? sourceText.value : undefined,
-    sourceText: form.inputType !== 'topic' ? sourceText.value : undefined,
+    topic: form.inputType === 'topic' ? confirmedSourceText.value : undefined,
+    sourceText: form.inputType !== 'topic' ? confirmedSourceText.value : undefined,
     contentLanguage: form.contentLanguage,
     aspectRatio: form.aspectRatio,
     targetSceneCount: form.targetSceneCount,
@@ -287,7 +354,16 @@ function toCreateProjectRequest(): CreateProjectRequest {
     stylePrompt: form.stylePrompt.trim() || undefined,
     activePackId: form.activePackId,
     inputProcessMode: inputProcessMode.value,
-    inputOptions: form.inputType === 'paste' ? { splitMode: 'paragraph' } : undefined,
+    inputOptions: showSplitPreview.value
+      ? {
+          splitMode: splitMode.value,
+          confirmedSegments: confirmedSegmentTexts.value.map((text, index) => ({
+            index: index + 1,
+            sourceText: text,
+            narrationText: text,
+          })),
+        }
+      : undefined,
   }
 }
 
@@ -307,5 +383,62 @@ async function handleCreate() {
   } finally {
     isCreating.value = false
   }
+}
+
+function rebuildSegmentsFromSource() {
+  segmentDrafts.value = splitSourceText(sourceText.value, splitMode.value).map((text) => createSegmentDraft(text))
+}
+
+function splitSourceText(value: string, mode: SplitMode) {
+  const text = value.trim()
+  if (!text) return []
+  if (mode === 'line') return text.split(/\r?\n/).map((part) => part.trim()).filter(Boolean)
+  if (mode === 'sentence') {
+    const matches = text.match(/[^。！？!?；;\n]+[。！？!?；;]?/g) ?? [text]
+    return matches.map((part) => part.trim()).filter(Boolean)
+  }
+  return text.split(/\n\s*\n+/).map((part) => part.trim()).filter(Boolean)
+}
+
+function createSegmentDraft(text: string): SegmentDraft {
+  segmentDraftCounter += 1
+  return {
+    id: `segment_${segmentDraftCounter}`,
+    text,
+  }
+}
+
+function splitSegment(index: number) {
+  const segment = segmentDrafts.value[index]
+  if (!segment) return
+  const text = segment.text.trim()
+  const middle = Math.floor(text.length / 2)
+  const splitAt = findSplitIndex(text, middle)
+  if (splitAt <= 0 || splitAt >= text.length - 1) return
+  segmentDrafts.value.splice(index, 1, createSegmentDraft(text.slice(0, splitAt).trim()), createSegmentDraft(text.slice(splitAt).trim()))
+}
+
+function mergeSegment(index: number) {
+  if (index <= 0) return
+  const previous = segmentDrafts.value[index - 1]
+  const current = segmentDrafts.value[index]
+  if (!previous || !current) return
+  segmentDrafts.value.splice(index - 1, 2, createSegmentDraft(`${previous.text.trim()}\n${current.text.trim()}`.trim()))
+}
+
+function removeSegment(index: number) {
+  if (segmentDrafts.value.length <= 1) return
+  segmentDrafts.value.splice(index, 1)
+}
+
+function findSplitIndex(text: string, fallback: number) {
+  const separators = ['。', '！', '？', '；', ';', '!', '?', '\n', '，', ',']
+  for (const separator of separators) {
+    const right = text.indexOf(separator, fallback)
+    if (right > 0) return right + separator.length
+    const left = text.lastIndexOf(separator, fallback)
+    if (left > 0) return left + separator.length
+  }
+  return fallback
 }
 </script>

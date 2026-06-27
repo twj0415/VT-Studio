@@ -1,7 +1,7 @@
 use crate::db::{Database, Repository};
 use crate::domain::project::{
     CreateProjectRequest, ListProjectsRequest, NamedProjectAssetDto, PageResult, ProjectBibleDto,
-    ProjectDetailDto, ProjectDto, ProjectLatestTaskDto, ProjectSummaryDto,
+    ProjectDetailDto, ProjectDto, ProjectLatestTaskDto, ProjectSummaryDto, UpdateProjectFields,
 };
 use crate::domain::task::{
     initial_step_status, DIGITAL_HUMAN_PIPELINE_STEPS, DIGITAL_HUMAN_TASK_KIND,
@@ -176,6 +176,8 @@ impl<'db> ProjectRepository<'db> {
 
         if let Some(lifecycle) = request.lifecycle.as_deref() {
             projects.retain(|project| project.lifecycle == lifecycle);
+        } else {
+            projects.retain(|project| project.lifecycle != "deleted");
         }
 
         if matches!(request.sort_by.as_deref(), Some("title")) {
@@ -250,6 +252,71 @@ impl<'db> ProjectRepository<'db> {
             .ok_or_else(|| format!("Project not found: {project_id}"))
     }
 
+    pub fn update_basic_fields(
+        &self,
+        project_id: &str,
+        fields: UpdateProjectFields,
+    ) -> Result<ProjectDetailDto, String> {
+        let input_options_json =
+            serde_json::to_string(&fields.input_options).map_err(|error| error.to_string())?;
+        let rule_refs_json =
+            serde_json::to_string(&fields.rule_refs).map_err(|error| error.to_string())?;
+        let executable_refs_json =
+            serde_json::to_string(&fields.executable_refs).map_err(|error| error.to_string())?;
+
+        let affected = self
+            .database
+            .with_connection(|connection| {
+                connection.execute(
+                    r#"
+                    UPDATE projects
+                    SET
+                        title = ?1,
+                        input_options_json = ?2,
+                        source_text = ?3,
+                        source_text_path = ?4,
+                        aspect_ratio = ?5,
+                        target_scene_count = ?6,
+                        segment_duration_seconds = ?7,
+                        style_prompt = ?8,
+                        active_pack_id = ?9,
+                        rule_refs_json = ?10,
+                        executable_refs_json = ?11,
+                        cover_title = ?12,
+                        tone = ?13,
+                        content_language = ?14,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE project_id = ?15
+                    "#,
+                    params![
+                        fields.title,
+                        input_options_json,
+                        fields.source_text,
+                        fields.source_text_path,
+                        fields.aspect_ratio,
+                        fields.target_scene_count,
+                        fields.segment_duration_seconds,
+                        fields.style_prompt,
+                        fields.active_pack_id,
+                        rule_refs_json,
+                        executable_refs_json,
+                        fields.cover_title,
+                        fields.tone,
+                        fields.content_language,
+                        project_id
+                    ],
+                )
+            })
+            .map_err(|error| error.to_string())?;
+
+        if affected == 0 {
+            return Err(format!("Project not found: {project_id}"));
+        }
+
+        self.get_detail(project_id)?
+            .ok_or_else(|| format!("Project not found: {project_id}"))
+    }
+
     pub fn update_source_text_path(
         &self,
         project_id: &str,
@@ -271,6 +338,33 @@ impl<'db> ProjectRepository<'db> {
                 Ok(())
             })
             .map_err(|error| error.to_string())?;
+
+        self.get_detail(project_id)?
+            .ok_or_else(|| format!("Project not found: {project_id}"))
+    }
+
+    pub fn update_lifecycle(
+        &self,
+        project_id: &str,
+        lifecycle: &str,
+    ) -> Result<ProjectDetailDto, String> {
+        let affected = self
+            .database
+            .with_connection(|connection| {
+                connection.execute(
+                    r#"
+                    UPDATE projects
+                    SET lifecycle = ?1, updated_at = CURRENT_TIMESTAMP
+                    WHERE project_id = ?2
+                    "#,
+                    params![lifecycle, project_id],
+                )
+            })
+            .map_err(|error| error.to_string())?;
+
+        if affected == 0 {
+            return Err(format!("Project not found: {project_id}"));
+        }
 
         self.get_detail(project_id)?
             .ok_or_else(|| format!("Project not found: {project_id}"))

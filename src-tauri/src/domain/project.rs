@@ -110,6 +110,38 @@ pub struct CreateProjectRequest {
     pub input_options: Option<Value>,
 }
 
+#[derive(Debug, Clone)]
+pub struct UpdateProjectFields {
+    pub title: String,
+    pub input_options: Value,
+    pub source_text: Option<String>,
+    pub source_text_path: Option<String>,
+    pub aspect_ratio: String,
+    pub target_scene_count: u32,
+    pub segment_duration_seconds: f64,
+    pub style_prompt: Option<String>,
+    pub active_pack_id: Option<String>,
+    pub rule_refs: Value,
+    pub executable_refs: Value,
+    pub cover_title: Option<String>,
+    pub tone: Option<String>,
+    pub content_language: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateProjectRequest {
+    pub project_id: String,
+    pub patch: Value,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateProjectLifecycleRequest {
+    pub project_id: String,
+    pub lifecycle: String,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerateProjectCoverRequest {

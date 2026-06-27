@@ -2,7 +2,6 @@ use crate::core::error::TaskError;
 use crate::db::asset_repository::{AssetRepository, NewAssetReferenceRecord};
 use crate::db::character_repository::CharacterRepository;
 use crate::db::location_repository::LocationRepository;
-use crate::db::provider_repository::{ProviderRecord, ProviderRepository};
 use crate::db::scene_repository::SceneRepository;
 use crate::db::style_repository::{normalize_style_data, StyleBibleRecordInput, StyleRepository};
 use crate::db::Database;
@@ -23,7 +22,6 @@ use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const NEGATIVE_PROMPT_MAX_LENGTH: usize = 800;
-const CONTROLLED_DUMMY_VLM_PROVIDER_ID: &str = "provider_controlled_fake_vlm";
 
 pub fn get_project_style_bible(
     database: &Database,
@@ -210,10 +208,18 @@ pub fn analyze_style_reference_image(
     }
 
     let reference_image_path = select_style_reference_path(&style_bible)?;
-    let provider_id = match request.provider_id.as_deref().map(str::trim) {
-        Some(provider_id) if !provider_id.is_empty() => provider_id.to_string(),
-        _ => ensure_controlled_dummy_vlm_provider(database)?,
-    };
+    let provider_id = request
+        .provider_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|provider_id| !provider_id.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| {
+            task_validation_error(
+                "validation.missing_input",
+                "Style reference analysis requires a real VLM provider.".to_string(),
+            )
+        })?;
     let provider_model_id = request
         .provider_model_id
         .as_deref()
@@ -780,39 +786,6 @@ fn select_style_reference_path(style: &StyleBibleDto) -> Result<String, TaskErro
     Ok(path)
 }
 
-fn ensure_controlled_dummy_vlm_provider(database: &Database) -> Result<String, TaskError> {
-    let repository = ProviderRepository::new(database);
-    let providers = repository.list_providers().map_err(provider_config_error)?;
-    if providers.iter().any(|provider| {
-        provider.provider_id == CONTROLLED_DUMMY_VLM_PROVIDER_ID
-            && provider.kind == "vlm"
-            && provider.enabled
-            && provider.status != "disabled"
-    }) {
-        return Ok(CONTROLLED_DUMMY_VLM_PROVIDER_ID.to_string());
-    }
-
-    repository
-        .upsert_provider(&ProviderRecord {
-            provider_id: CONTROLLED_DUMMY_VLM_PROVIDER_ID.to_string(),
-            vendor: "dummy".to_string(),
-            kind: "vlm".to_string(),
-            display_name: "Controlled dummy VLM".to_string(),
-            auth_type: "none".to_string(),
-            key_alias: None,
-            base_url: None,
-            status: "ready".to_string(),
-            enabled: true,
-            config_json: json!({
-                "adapter": "dummy",
-                "controlled": true,
-                "externalNetwork": false
-            }),
-        })
-        .map_err(provider_config_error)?;
-    Ok(CONTROLLED_DUMMY_VLM_PROVIDER_ID.to_string())
-}
-
 fn style_reference_analysis_prompt() -> String {
     [
         "Analyze this style reference image for a short-video Style Bible.",
@@ -873,7 +846,7 @@ fn style_analysis_from_provider_response(
             })
             .filter(|value| !value.is_empty())
             .unwrap_or_else(|| {
-                warnings.push("style_reference.dummy_fallback".to_string());
+                warnings.push("style_reference.provider_response_missing_style_prompt".to_string());
                 "consistent visual style from reference image, medium detail, balanced subject-background separation".to_string()
             });
     let color_palette = read_style_string_array(&parsed, &["color_palette", "colorPalette"])
@@ -1063,10 +1036,6 @@ fn task_config_error(message: String) -> TaskError {
     TaskError::from_code("db.query_failed", message)
 }
 
-fn provider_config_error(message: String) -> TaskError {
-    TaskError::from_code("provider.config_error", message)
-}
-
 fn split_prompt_terms(prompt: &str) -> Vec<String> {
     prompt
         .split([',', '，', ';', '；', '\n'])
@@ -1156,7 +1125,6 @@ mod tests {
     use super::*;
     use crate::db::asset_repository::NewAssetRecord;
     use crate::db::project_repository::ProjectRepository;
-    use crate::db::provider_repository::{ProviderRecord, ProviderRepository};
     use crate::domain::project::CreateProjectRequest;
     use crate::services::keyring_service::KeyringService;
 
@@ -1692,7 +1660,7 @@ mod tests {
         )
         .expect("asset should bind");
 
-        let analysis = analyze_style_reference_image(
+        let missing_provider = analyze_style_reference_image(
             &database,
             &KeyringService::memory(),
             AnalyzeStyleReferenceRequest {
@@ -1702,43 +1670,8 @@ mod tests {
                 provider_model_id: None,
             },
         )
-        .expect("analysis should succeed");
-
-        assert_eq!(
-            analysis.reference_image_path,
-            "assets/style_reference_image/ref.png"
-        );
-        assert!(!analysis.style_prompt.trim().is_empty());
-        assert!(!analysis.color_palette.is_empty());
-        assert!(!analysis.lighting.trim().is_empty());
-        assert!(!analysis.composition.trim().is_empty());
-        assert!(analysis
-            .provider_id
-            .as_deref()
-            .is_some_and(|provider_id| { provider_id == CONTROLLED_DUMMY_VLM_PROVIDER_ID }));
-
-        let serialized = serde_json::to_string(&analysis).expect("analysis should serialize");
-        for forbidden in [
-            "Alice",
-            "ACME",
-            "portrait of a woman",
-            "logo on wall",
-            "phone",
-            "email",
-            "address",
-        ] {
-            assert!(
-                !serialized
-                    .to_ascii_lowercase()
-                    .contains(&forbidden.to_ascii_lowercase()),
-                "analysis leaked forbidden term: {forbidden}"
-            );
-        }
-        let saved = StyleRepository::new(&database)
-            .get_style_bible(&analysis.style_bible_id)
-            .expect("style should read")
-            .expect("style should exist");
-        assert!(saved.style_prompt.is_empty());
+        .expect_err("analysis without real provider should fail");
+        assert_eq!(missing_provider.error_code, "validation.missing_input");
 
         cleanup(root);
     }
@@ -1831,23 +1764,5 @@ mod tests {
                 },
             )
             .expect("project should create");
-    }
-
-    #[allow(dead_code)]
-    fn seed_vlm_provider(database: &Database, provider_id: &str) {
-        ProviderRepository::new(database)
-            .upsert_provider(&ProviderRecord {
-                provider_id: provider_id.to_string(),
-                vendor: "dummy".to_string(),
-                kind: "vlm".to_string(),
-                display_name: "Dummy VLM".to_string(),
-                auth_type: "none".to_string(),
-                key_alias: None,
-                base_url: None,
-                status: "ready".to_string(),
-                enabled: true,
-                config_json: json!({ "adapter": "dummy" }),
-            })
-            .expect("provider should save");
     }
 }

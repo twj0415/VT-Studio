@@ -11,6 +11,7 @@ import ProjectWorkbenchPage from '@/pages/project-workbench/index.vue'
 import SettingsPage from '@/pages/settings/index.vue'
 import StoryboardEditorPage from '@/pages/storyboard-editor/index.vue'
 import VideoGenerationPage from '@/pages/video-generation/index.vue'
+import { showAiToolsEntry } from '@/shared/runtime/productMode'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -35,6 +36,10 @@ export const router = createRouter({
 })
 
 router.beforeEach((to) => {
+  if (to.name === 'ai-tools' && !showAiToolsEntry) {
+    return '/'
+  }
+
   const lockedStagePaths = ['/subtitle', '/cover', '/export']
 
   if (lockedStagePaths.some((path) => to.path.includes(path))) {

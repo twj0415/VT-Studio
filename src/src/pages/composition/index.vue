@@ -1,7 +1,7 @@
 <template>
   <section class="view h-full min-w-0 overflow-hidden bg-page text-primary">
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
-      <WorkspaceHeader :project-id="projectId" :project-title="projectTitle" current-step="composition" :access="workspaceAccess" :back-to="`/projects/${projectId}/workspace/video`" :badge-label="t('compositionGeneration.mockBadge')" right-width-class="w-[620px]" :usage="resourceUsage" @blocked="handleBlockedStep">
+      <WorkspaceHeader :project-id="projectId" :project-title="projectTitle" current-step="composition" :access="workspaceAccess" :back-to="`/projects/${projectId}/workspace/video`" right-width-class="w-[520px]" :usage="resourceUsage" @blocked="handleBlockedStep">
         <template #actions>
           <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm border border-border-strong px-vt-3 text-sm font-medium text-secondary transition hover:bg-card hover:text-primary disabled:cursor-not-allowed disabled:opacity-50" :disabled="!latestExportRecord || isOpeningDirectory" @click="handleOpenOutputDir(latestExportRecord?.exportId)">{{ t('compositionGeneration.openOutputDir') }}</button>
           <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm border border-accent-line bg-accent-soft px-vt-3 text-sm font-semibold text-accent transition hover:bg-accent-soft/80 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!canExportFinalVideo || isExporting" @click="handleExportFinalVideo">{{ t('compositionGeneration.exportFinalVideo') }}</button>
@@ -73,7 +73,6 @@
           <aside class="flex min-h-0 flex-col gap-vt-3 overflow-y-auto rounded-vt-md border border-border bg-card p-vt-3">
             <div class="flex items-center justify-between gap-vt-2">
               <div class="text-sm font-semibold text-primary">{{ t('compositionGeneration.outputTitle') }}</div>
-              <span class="rounded-vt-sm border border-accent-line bg-accent-soft px-vt-2 py-0.5 text-[11px] font-medium text-accent">{{ t('compositionGeneration.mockBadge') }}</span>
             </div>
             <div class="grid gap-vt-2 text-xs">
               <div class="rounded-vt-sm border border-border bg-page p-vt-3">
@@ -106,71 +105,6 @@
               <div class="rounded-vt-sm border border-border bg-page p-vt-3">
                 <div class="text-muted">{{ t('compositionGeneration.probeTitle') }}</div>
                 <div class="mt-vt-1 text-primary">{{ t('compositionGeneration.probeCount', { count: probedSegmentCount, total: confirmedSegmentCount }) }}</div>
-              </div>
-              <div class="rounded-vt-sm border border-border bg-page p-vt-3">
-                <div class="flex items-center justify-between gap-vt-2">
-                  <div class="text-muted">{{ t('compositionGeneration.optional.title') }}</div>
-                  <span class="text-[11px] text-muted">{{ t('compositionGeneration.optional.hint') }}</span>
-                </div>
-                <div class="mt-vt-2 grid gap-vt-2">
-                  <label class="inline-flex items-center gap-vt-2 text-secondary">
-                    <input v-model="includeSubtitle" type="checkbox" class="size-4 accent-[var(--accent)]" />
-                    <span>{{ t('compositionGeneration.optional.subtitle') }}</span>
-                  </label>
-                  <div class="break-all rounded-vt-sm border border-border bg-card px-vt-2 py-vt-1 font-mono text-[11px] text-muted">{{ subtitlePath }}</div>
-                  <label class="inline-flex items-center gap-vt-2 text-secondary">
-                    <input v-model="includeCoverMetadata" type="checkbox" class="size-4 accent-[var(--accent)]" />
-                    <span>{{ t('compositionGeneration.optional.cover') }}</span>
-                  </label>
-                  <div class="break-all rounded-vt-sm border border-border bg-card px-vt-2 py-vt-1 font-mono text-[11px] text-muted">{{ projectStore.currentProject?.project.coverPath || t('compositionGeneration.optional.noCover') }}</div>
-                  <div v-if="enhancementStepSummary.length > 0" class="grid gap-vt-1">
-                    <div v-for="step in enhancementStepSummary" :key="step.key" class="flex items-center justify-between gap-vt-2 text-[11px]">
-                      <span class="text-muted">{{ step.label }}</span>
-                      <span class="rounded-vt-sm border border-border bg-card px-vt-2 py-0.5 text-secondary">{{ step.status }}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div class="rounded-vt-sm border border-border bg-page p-vt-3">
-                <div class="flex items-center justify-between gap-vt-2">
-                  <div class="text-muted">{{ t('compositionGeneration.bgm.title') }}</div>
-                  <label class="inline-flex items-center gap-vt-2 text-secondary">
-                    <input v-model="includeBgm" type="checkbox" class="size-4 accent-[var(--accent)]" />
-                    <span>{{ t('compositionGeneration.bgm.enable') }}</span>
-                  </label>
-                </div>
-                <div class="mt-vt-2 grid gap-vt-2">
-                  <select v-model="selectedBgmAssetId" class="h-9 rounded-vt-sm border border-border bg-card px-vt-2 text-xs text-primary outline-none focus:border-accent-line" :disabled="!includeBgm">
-                    <option value="">{{ t('compositionGeneration.bgm.empty') }}</option>
-                    <option v-for="asset in bgmAssets" :key="asset.assetId" :value="asset.assetId">{{ bgmAssetLabel(asset) }}</option>
-                  </select>
-                  <div class="grid gap-vt-1">
-                    <div class="flex items-center justify-between gap-vt-2">
-                      <span class="text-muted">{{ t('compositionGeneration.bgm.volume') }}</span>
-                      <span class="font-mono text-primary">{{ Math.round(bgmVolume * 100) }}%</span>
-                    </div>
-                    <input v-model.number="bgmVolume" type="range" min="0" max="0.6" step="0.01" class="w-full accent-[var(--accent)]" :disabled="!includeBgm" />
-                  </div>
-                  <div class="grid grid-cols-2 gap-vt-2">
-                    <label class="grid gap-vt-1">
-                      <span class="text-muted">{{ t('compositionGeneration.bgm.fadeIn') }}</span>
-                      <input v-model.number="bgmFadeInSeconds" type="number" min="0" max="30" step="0.5" class="h-8 rounded-vt-sm border border-border bg-card px-vt-2 text-xs text-primary outline-none focus:border-accent-line" :disabled="!includeBgm" />
-                    </label>
-                    <label class="grid gap-vt-1">
-                      <span class="text-muted">{{ t('compositionGeneration.bgm.fadeOut') }}</span>
-                      <input v-model.number="bgmFadeOutSeconds" type="number" min="0" max="30" step="0.5" class="h-8 rounded-vt-sm border border-border bg-card px-vt-2 text-xs text-primary outline-none focus:border-accent-line" :disabled="!includeBgm" />
-                    </label>
-                  </div>
-                  <label class="inline-flex items-center gap-vt-2 text-secondary">
-                    <input v-model="bgmLoop" type="checkbox" class="size-4 accent-[var(--accent)]" :disabled="!includeBgm" />
-                    <span>{{ t('compositionGeneration.bgm.loop') }}</span>
-                  </label>
-                  <div class="flex gap-vt-2">
-                    <input v-model.trim="bgmImportPath" type="text" class="min-w-0 flex-1 rounded-vt-sm border border-border bg-card px-vt-2 text-xs text-primary outline-none focus:border-accent-line" :placeholder="t('compositionGeneration.bgm.importPlaceholder')" />
-                    <button type="button" class="rounded-vt-sm border border-border px-vt-2 py-vt-1 text-xs text-secondary transition hover:bg-card-hover hover:text-primary disabled:cursor-not-allowed disabled:opacity-50" :disabled="!bgmImportPath || isImportingBgm" @click="handleImportBgm">{{ t('compositionGeneration.bgm.import') }}</button>
-                  </div>
-                  <div class="text-[11px] leading-5 text-muted">{{ t('compositionGeneration.bgm.hint') }}</div>
-                </div>
               </div>
               <div class="rounded-vt-sm border border-border bg-page p-vt-3">
                 <div class="flex items-center justify-between gap-vt-2">
@@ -225,8 +159,6 @@ import WorkspaceHeader from '@/features/workspace/WorkspaceHeader.vue'
 import WorkspaceRowJump from '@/features/workspace/WorkspaceRowJump.vue'
 import { backupWorkspace, exportFinalVideo, exportProjectPackage, listExportRecords, openExportDirectory } from '@/entities/export/api'
 import type { BackupWorkspaceDto, ExportKind, ExportRecordDto, ExportStatus } from '@/entities/export/types'
-import { importAsset, listAssets } from '@/entities/config/api'
-import type { AssetDto } from '@/entities/config/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -240,19 +172,8 @@ const isExporting = ref(false)
 const isExportingPackage = ref(false)
 const isBackingUpWorkspace = ref(false)
 const isOpeningDirectory = ref(false)
-const isImportingBgm = ref(false)
 const exportRecords = ref<ExportRecordDto[]>([])
 const latestBackup = ref<BackupWorkspaceDto | null>(null)
-const bgmAssets = ref<AssetDto[]>([])
-const includeBgm = ref(false)
-const selectedBgmAssetId = ref('')
-const bgmVolume = ref(0.18)
-const bgmLoop = ref(true)
-const bgmFadeInSeconds = ref(1)
-const bgmFadeOutSeconds = ref(1)
-const bgmImportPath = ref('')
-const includeSubtitle = ref(false)
-const includeCoverMetadata = ref(false)
 
 const storyboardItems = computed(() => storyboardStore.storyboard?.items ?? [])
 const workspaceAccess = computed(() => getWorkspaceStepAccess(storyboardItems.value, storyboardStore.storyboard?.reviewStatus))
@@ -265,25 +186,6 @@ const taskStatusText = computed(() => (compositionTask.value ? t(`dict.taskStatu
 const compositionResetCount = computed(() => storyboardItems.value.filter((item) => compositionResetRecord(item)).length)
 const canExportFinalVideo = computed(() => compositionTask.value?.status === 'succeeded' && Boolean(compositionTask.value.outputPath))
 const latestExportRecord = computed(() => exportRecords.value[0] ?? null)
-const subtitlePath = computed(() => `projects/${projectId}/subtitles/subtitles.json`)
-const enhancementStepSummary = computed(() => {
-  const steps = compositionTask.value?.enhancements.steps
-  if (!Array.isArray(steps)) return []
-  return steps
-    .map((entry) => {
-      if (!entry || typeof entry !== 'object') return null
-      const record = entry as Record<string, unknown>
-      const key = typeof record.step === 'string' ? record.step : ''
-      const status = typeof record.status === 'string' ? record.status : ''
-      if (!key || !status) return null
-      return {
-        key,
-        label: t(`compositionGeneration.optional.steps.${key}`),
-        status: t(`compositionGeneration.optional.stepStatus.${status}`),
-      }
-    })
-    .filter((entry): entry is { key: string; label: string; status: string } => Boolean(entry))
-})
 const resourceUsage = computed(() => ({
   images: storyboardItems.value.reduce((total, item) => total + item.imageCandidates.length, 0),
   videos: storyboardItems.value.reduce((total, item) => total + item.videoSegments.length, 0),
@@ -291,13 +193,12 @@ const resourceUsage = computed(() => ({
 }))
 
 onMounted(async () => {
-  await Promise.all([projectStore.loadProject(projectId), storyboardStore.loadStoryboard(projectId), loadExportRecords(), loadBgmAssets()])
+  await Promise.all([projectStore.loadProject(projectId), storyboardStore.loadStoryboard(projectId), loadExportRecords()])
 
   if (!workspaceAccess.value.canEnterComposition) {
     message.warning(t('workspaceStepBar.blocked.composition'))
     await router.replace(getWorkspaceStepPath(projectId, getRequiredWorkspaceStep('composition', workspaceAccess.value)))
   }
-  hydrateBgmFromTask()
 })
 
 async function handleStartComposition() {
@@ -308,50 +209,11 @@ async function handleStartComposition() {
 
   isComposing.value = true
   try {
-    if (includeBgm.value && !selectedBgmAssetId.value) {
-      message.warning(t('compositionGeneration.bgm.selectRequired'))
-      return
-    }
-    await storyboardStore.startComposition({
-      projectId,
-      includeSubtitle: includeSubtitle.value,
-      subtitlePath: includeSubtitle.value ? subtitlePath.value : null,
-      includeBgm: includeBgm.value,
-      bgmAssetId: includeBgm.value ? selectedBgmAssetId.value : null,
-      bgmVolume: clampNumber(bgmVolume.value, 0, 0.6, 0.18),
-      bgmLoop: bgmLoop.value,
-      bgmFadeInSeconds: clampNumber(bgmFadeInSeconds.value, 0, 30, 0),
-      bgmFadeOutSeconds: clampNumber(bgmFadeOutSeconds.value, 0, 30, 0),
-      includeCoverMetadata: includeCoverMetadata.value,
-      coverPath: includeCoverMetadata.value ? (projectStore.currentProject?.project.coverPath ?? null) : null,
-    })
+    await storyboardStore.startComposition({ projectId })
     await loadExportRecords()
-    hydrateBgmFromTask()
     message.success(t('compositionGeneration.composeSuccess'))
   } finally {
     isComposing.value = false
-  }
-}
-
-async function handleImportBgm() {
-  if (!bgmImportPath.value) return
-  isImportingBgm.value = true
-  try {
-    const asset = await importAsset({
-      sourcePath: bgmImportPath.value,
-      kind: 'bgm',
-      displayName: bgmImportPath.value.split(/[\\/]/).pop() || 'bgm',
-      metadata: { usage: 'composition_bgm' },
-    })
-    await loadBgmAssets()
-    selectedBgmAssetId.value = asset.assetId
-    includeBgm.value = true
-    bgmImportPath.value = ''
-    message.success(t('compositionGeneration.bgm.importSuccess'))
-  } catch (error) {
-    message.error(t('compositionGeneration.bgm.importFailed', { reason: errorMessage(error) }))
-  } finally {
-    isImportingBgm.value = false
   }
 }
 
@@ -418,35 +280,6 @@ async function handleOpenOutputDir(exportId?: string) {
 
 async function loadExportRecords() {
   exportRecords.value = await listExportRecords({ projectId })
-}
-
-async function loadBgmAssets() {
-  bgmAssets.value = await listAssets({ kind: 'bgm' })
-  if (!selectedBgmAssetId.value && bgmAssets.value.length > 0) {
-    selectedBgmAssetId.value = bgmAssets.value[0].assetId
-  }
-}
-
-function hydrateBgmFromTask() {
-  const enhancements = compositionTask.value?.enhancements ?? {}
-  includeSubtitle.value = enhancements.includeSubtitle === true
-  includeCoverMetadata.value = enhancements.includeCoverMetadata === true
-  const taskIncludeBgm = enhancements.includeBgm === true
-  includeBgm.value = taskIncludeBgm
-  selectedBgmAssetId.value = typeof enhancements.bgmAssetId === 'string' ? enhancements.bgmAssetId : selectedBgmAssetId.value
-  bgmVolume.value = typeof enhancements.bgmVolume === 'number' ? enhancements.bgmVolume : bgmVolume.value
-  bgmLoop.value = typeof enhancements.bgmLoop === 'boolean' ? enhancements.bgmLoop : bgmLoop.value
-  bgmFadeInSeconds.value = typeof enhancements.bgmFadeInSeconds === 'number' ? enhancements.bgmFadeInSeconds : bgmFadeInSeconds.value
-  bgmFadeOutSeconds.value = typeof enhancements.bgmFadeOutSeconds === 'number' ? enhancements.bgmFadeOutSeconds : bgmFadeOutSeconds.value
-}
-
-function bgmAssetLabel(asset: AssetDto) {
-  const displayName = typeof asset.metadata.displayName === 'string' ? asset.metadata.displayName : asset.relativePath.split('/').pop()
-  return displayName ? `${displayName} · ${asset.relativePath}` : asset.relativePath
-}
-
-function clampNumber(value: number, min: number, max: number, fallback: number) {
-  return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback
 }
 
 function selectedSegment(item: StoryboardItemDto) {

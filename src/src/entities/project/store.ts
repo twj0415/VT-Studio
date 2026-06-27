@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 
-import { createProject, generateProjectCover, getProjectDetail, listProjects, replaceProjectCoverImage } from './api'
-import type { CreateProjectRequest, GenerateProjectCoverRequest, ProjectDetailDto, ProjectSummaryDto, ReplaceProjectCoverImageRequest } from './types'
+import { createProject, generateProjectCover, getProjectDetail, listProjects, replaceProjectCoverImage, updateProject, updateProjectLifecycle } from './api'
+import type { CreateProjectRequest, GenerateProjectCoverRequest, ListProjectsRequest, ProjectDetailDto, ProjectSummaryDto, ReplaceProjectCoverImageRequest, UpdateProjectLifecycleRequest, UpdateProjectRequest } from './types'
 
 export const useProjectStore = defineStore('project', {
   state: () => ({
@@ -9,8 +9,8 @@ export const useProjectStore = defineStore('project', {
     currentProject: null as ProjectDetailDto | null,
   }),
   actions: {
-    async loadProjects() {
-      const result = await listProjects({ page: 1, pageSize: 20, sortBy: 'updated_at', sortOrder: 'desc' })
+    async loadProjects(request: Partial<ListProjectsRequest> = {}) {
+      const result = await listProjects({ page: 1, pageSize: 20, sortBy: 'updated_at', sortOrder: 'desc', ...request })
       this.projects = result.items
     },
     async createDraftProject(request: CreateProjectRequest) {
@@ -22,6 +22,11 @@ export const useProjectStore = defineStore('project', {
       this.currentProject = await getProjectDetail(projectId)
       return this.currentProject
     },
+    async updateProject(request: UpdateProjectRequest) {
+      this.currentProject = await updateProject(request)
+      await this.loadProjects()
+      return this.currentProject
+    },
     async generateCover(request: GenerateProjectCoverRequest) {
       this.currentProject = await generateProjectCover(request)
       await this.loadProjects()
@@ -31,6 +36,14 @@ export const useProjectStore = defineStore('project', {
       this.currentProject = await replaceProjectCoverImage(request)
       await this.loadProjects()
       return this.currentProject
+    },
+    async updateLifecycle(request: UpdateProjectLifecycleRequest) {
+      const detail = await updateProjectLifecycle(request)
+      if (this.currentProject?.project.projectId === request.projectId) {
+        this.currentProject = detail
+      }
+      await this.loadProjects()
+      return detail
     },
   },
 })

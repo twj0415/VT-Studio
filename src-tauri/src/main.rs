@@ -37,6 +37,7 @@ fn main() {
             commands::project::list_projects,
             commands::project::get_project_detail,
             commands::project::update_project,
+            commands::project::update_project_lifecycle,
             commands::project::generate_project_cover,
             commands::project::replace_project_cover_image,
             commands::novel::import_novel,

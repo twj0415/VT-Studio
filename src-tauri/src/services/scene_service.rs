@@ -3,6 +3,8 @@ use crate::db::asset_repository::{
     AssetRepository, NewAssetRecord, NewAssetReferenceRecord, NewGeneratedImageAssetRecord,
 };
 use crate::db::character_repository::CharacterRepository;
+use crate::db::project_repository::ProjectRepository;
+#[cfg(test)]
 use crate::db::provider_repository::{ProviderModelRecord, ProviderRecord, ProviderRepository};
 use crate::db::scene_repository::{
     NewImageCandidateRecord, NewVideoSegmentRecord, SceneRepository,
@@ -39,7 +41,7 @@ use crate::services::location_service::{
 use crate::services::media_service::list_executable_media_options;
 use crate::services::prompt_service::project_rule_snapshot;
 use crate::services::provider_service::ProviderManager;
-use crate::services::storage_service::{FileAccessPolicy, FileBucket, StorageService};
+use crate::services::storage_service::{FileAccessPolicy, FileBucket, StorageService, StoredFile};
 use crate::services::structured_output_service::validate_structured_output;
 use crate::services::style_service::build_image_prompt_preview_for_item;
 use crate::services::task_cancellation::CancellationToken;
@@ -52,15 +54,18 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const IMAGE_GENERATION_STEP: &str = "image_generation";
 const VIDEO_GENERATION_STEP: &str = "video_generation";
 const GENERATION_CONTEXT_SCHEMA_VERSION: u32 = 1;
+#[cfg(test)]
 const CONTROLLED_FAKE_PROVIDER_ID: &str = "provider_controlled_fake_image";
+#[cfg(test)]
 const CONTROLLED_FAKE_MODEL_ID: &str = "model_controlled_fake_t2i";
+#[cfg(test)]
 const CONTROLLED_FAKE_PROVIDER_MODEL_ID: &str = "controlled-fake/text-to-image-v1";
+#[cfg(test)]
 const CONTROLLED_FAKE_VIDEO_PROVIDER_ID: &str = "provider_controlled_fake_video";
+#[cfg(test)]
 const CONTROLLED_FAKE_VIDEO_MODEL_ID: &str = "model_controlled_fake_i2v";
+#[cfg(test)]
 const CONTROLLED_FAKE_VIDEO_PROVIDER_MODEL_ID: &str = "controlled-fake/image-to-video-v1";
-const CONTROLLED_FAKE_TTS_PROVIDER_ID: &str = "provider_controlled_fake_tts";
-const CONTROLLED_FAKE_TTS_MODEL_ID: &str = "model_controlled_fake_tts";
-const CONTROLLED_FAKE_TTS_PROVIDER_MODEL_ID: &str = "controlled-fake/tts-v1";
 const SUBTITLE_SCHEMA_VERSION: u32 = 1;
 const SUBTITLE_TARGET_MIN_CHARS: usize = 12;
 const SUBTITLE_TARGET_MAX_CHARS: usize = 18;
@@ -104,7 +109,14 @@ pub fn get_storyboard(database: &Database, project_id: String) -> Result<Storybo
         }
     }
 
-    Ok(default_storyboard(project_id))
+    let storyboard = initial_storyboard_from_project(database, &project_id)?
+        .unwrap_or_else(|| default_storyboard(project_id.clone()));
+    let items = batch_update_storyboard_items(database, storyboard.items)?;
+    Ok(StoryboardDto {
+        confirmed_narrations: items.iter().map(storyboard_item_to_narration).collect(),
+        items,
+        ..storyboard
+    })
 }
 
 pub fn update_storyboard_item(database: &Database, item: SceneDto) -> Result<SceneDto, String> {
@@ -232,7 +244,6 @@ pub fn build_character_resource_plan(
         ));
     }
 
-    ensure_controlled_fake_image_provider(database)?;
     let option = resolve_image_generation_option(
         database,
         &StartImageGenerationRequest {
@@ -424,7 +435,6 @@ fn start_image_generation_with_options(
     let prompt_preview = build_image_prompt_preview_for_item(database, &request.project_id, &item)?;
     let rule_snapshot = project_rule_snapshot(database, workspace_root, &request.project_id)?;
 
-    ensure_controlled_fake_image_provider(database)?;
     let option = resolve_image_generation_option(database, &request)?;
     if let Err(message) =
         validate_required_image_inputs(database, &option, &item, request.workflow_params.as_ref())
@@ -531,12 +541,30 @@ fn start_image_generation_with_options(
             })?;
 
         token.throw_if_cancelled()?;
-        let stored = storage.write_bytes(
+        let stored = validate_provider_output_file(
+            &storage,
             FileBucket::Project,
             &project_relative_path,
-            &controlled_fake_png_bytes(revision, variant_index),
-            FileAccessPolicy::WriteProject,
-        )?;
+            &provider_response.image_path,
+            "image provider",
+        )
+        .map_err(|error| {
+            record_image_generation_failure(
+                &task_repository,
+                &scene_repository,
+                &request,
+                &task_id,
+                &step_id,
+                provider_error_input_json(
+                    &option,
+                    &item,
+                    &rule_snapshot,
+                    revision,
+                    variant_index,
+                ),
+                error,
+            )
+        })?;
         let provider_model_id = option
             .provider_model_id
             .clone()
@@ -610,10 +638,7 @@ fn start_image_generation_with_options(
             "projectId": request.project_id,
             "itemId": request.item_id,
             "revision": revision,
-            "imageCandidates": output_candidates,
-            "billable": false,
-            "externalNetwork": false,
-            "controlledFake": true
+            "imageCandidates": output_candidates
         }),
         artifacts: artifact_records,
     })?;
@@ -634,7 +659,6 @@ pub fn start_image_asset_generation(
     request: StartImageAssetGenerationRequest,
 ) -> Result<Vec<GeneratedImageAssetDto>, String> {
     validate_asset_generation_request(&request)?;
-    ensure_controlled_fake_image_provider(database)?;
     let option = resolve_image_asset_generation_option(database, &request)?;
     validate_required_image_asset_inputs(&option, &request)?;
     let rule_snapshot = project_rule_snapshot(database, workspace_root, &request.project_id)?;
@@ -730,12 +754,23 @@ pub fn start_image_asset_generation(
             })?;
 
         token.throw_if_cancelled()?;
-        let stored = storage.write_bytes(
+        let stored = validate_provider_output_file(
+            &storage,
             FileBucket::Asset,
             &project_relative_path,
-            &controlled_fake_png_bytes(1, variant_index),
-            FileAccessPolicy::WriteProject,
-        )?;
+            &provider_response.image_path,
+            "image asset provider",
+        )
+        .map_err(|error| {
+            record_image_asset_generation_failure(
+                &task_repository,
+                &request,
+                &task_id,
+                &step_id,
+                image_asset_error_input_json(&option, &request, &rule_snapshot, variant_index),
+                error,
+            )
+        })?;
         let provider_model_id = option
             .provider_model_id
             .clone()
@@ -768,12 +803,8 @@ pub fn start_image_asset_generation(
                 "requiredCount": option.input_plan.required_count,
                 "optionalCount": option.input_plan.optional_count
             },
-            "providerOutputKind": "controlled_fake_bytes_converted_to_local_path",
+            "providerOutputKind": "provider_file",
             "providerImagePath": provider_response.image_path,
-            "billable": false,
-            "externalNetwork": false,
-            "mock": false,
-            "controlledFake": true,
             "sanitizedParamsSnapshot": {
                 "aspectRatio": request.aspect_ratio.clone().unwrap_or_else(|| "9:16".to_string()),
                 "width": request.width.unwrap_or(720),
@@ -806,7 +837,7 @@ pub fn start_image_asset_generation(
                     relative_path: stored.relative_path.clone(),
                     source_kind: "ai_generated".to_string(),
                     mime_type: Some("image/png".to_string()),
-                    size_bytes: Some(controlled_fake_png_bytes(1, variant_index).len() as i64),
+                    size_bytes: provider_response.file_size.map(|value| value as i64),
                     checksum: None,
                     is_builtin: false,
                     metadata: snapshot.clone(),
@@ -880,10 +911,7 @@ pub fn start_image_asset_generation(
             "ownerKind": request.owner_kind,
             "ownerId": request.owner_id,
             "referenceRole": request.reference_role,
-            "assets": output_assets,
-            "billable": false,
-            "externalNetwork": false,
-            "controlledFake": true
+            "assets": output_assets
         }),
         artifacts: artifact_records,
     })?;
@@ -969,7 +997,6 @@ pub fn start_tts_generation(
         message
     })?;
 
-    ensure_controlled_fake_tts_provider(database)?;
     let option = resolve_tts_generation_option(database, &request)?;
     let storage = StorageService::new(workspace_root);
     storage.initialize_workspace()?;
@@ -1028,21 +1055,22 @@ pub fn start_tts_generation(
         })?;
 
     token.throw_if_cancelled()?;
-    if is_absolute_snapshot_path(&response.audio_path) {
-        let error = TaskError::from_code_with_detail(
-            "provider.invalid_output_path",
-            "TTS provider returned an absolute output path.".to_string(),
-            Some(
-                json!({ "traceId": trace_id, "path": sanitize_snapshot_path(&response.audio_path) }),
-            ),
-        );
+    if let Err(error) = validate_provider_output_file(
+        &storage,
+        FileBucket::Project,
+        &project_relative_path,
+        &response.audio_path,
+        "TTS provider",
+    ) {
         scene_repository.mark_audio_generation_failed(&request.item_id, error.to_json())?;
-        return Err("TTS provider returned an invalid absolute output path.".to_string());
+        return Err(error.message);
     }
 
     scene_repository.update_storyboard_item_audio(
         &request.item_id,
-        &response.audio_path,
+        &storage
+            .resolver()
+            .relative_bucket_path(FileBucket::Project, &project_relative_path)?,
         None,
         None,
     )
@@ -1292,7 +1320,6 @@ fn start_video_generation_with_options(
         ));
     }
 
-    ensure_controlled_fake_video_provider(database)?;
     let option = resolve_video_generation_option(database, &request)?;
     if let Err(error) = validate_video_option_ability(&option) {
         let message = prefixed_task_error_message(&error);
@@ -1401,7 +1428,7 @@ fn start_video_generation_with_options(
             )),
         };
 
-        let provider_output = if option.source_type == "workflow_preset" {
+        let (provider_video_path, provider_output) = if option.source_type == "workflow_preset" {
             let workflow_response = ProviderManager::new(database, keyring_service)
                 .run_workflow(
                     WorkflowProviderRequest {
@@ -1442,11 +1469,13 @@ fn start_video_generation_with_options(
                         error,
                     )
                 })?;
-            json!({
+            let provider_video_path = workflow_response.output_path.clone();
+            let provider_output = json!({
                 "providerVideoPath": workflow_response.output_path,
                 "providerOutputSummary": workflow_response.metadata,
-                "providerOutputKind": "workflow_output_converted_to_local_path"
-            })
+                "providerOutputKind": "workflow_file"
+            });
+            (provider_video_path, provider_output)
         } else {
             let provider_response = ProviderManager::new(database, keyring_service)
                 .generate_video(
@@ -1485,7 +1514,8 @@ fn start_video_generation_with_options(
                         error,
                     )
                 })?;
-            json!({
+            let provider_video_path = provider_response.video_path.clone();
+            let provider_output = json!({
                 "providerVideoPath": provider_response.video_path,
                 "providerDurationSeconds": provider_response.duration_seconds,
                 "providerFps": provider_response.fps,
@@ -1493,17 +1523,37 @@ fn start_video_generation_with_options(
                 "providerHeight": provider_response.height,
                 "providerFileSize": provider_response.file_size,
                 "providerOutputSummary": provider_response.provider_output_summary,
-                "providerOutputKind": "provider_video_converted_to_local_path"
-            })
+                "providerOutputKind": "provider_file"
+            });
+            (provider_video_path, provider_output)
         };
 
         token.throw_if_cancelled()?;
-        let stored = storage.write_bytes(
+        let stored = validate_provider_output_file(
+            &storage,
             FileBucket::Project,
             &project_relative_path,
-            &controlled_fake_mp4_bytes(revision, variant_index),
-            FileAccessPolicy::WriteProject,
-        )?;
+            &provider_video_path,
+            "video provider",
+        )
+        .map_err(|error| {
+            record_video_generation_failure(
+                &task_repository,
+                &scene_repository,
+                &request,
+                &task_id,
+                &step_id,
+                video_error_input_json(
+                    &option,
+                    &item,
+                    &selected_image,
+                    &rule_snapshot,
+                    revision,
+                    variant_index,
+                ),
+                error,
+            )
+        })?;
         let snapshot = build_video_generation_snapshot(VideoGenerationSnapshotInput {
             request: &request,
             item: &item,
@@ -1579,10 +1629,7 @@ fn start_video_generation_with_options(
             "projectId": request.project_id,
             "itemId": request.item_id,
             "revision": revision,
-            "videoSegments": output_segments,
-            "billable": false,
-            "externalNetwork": false,
-            "controlledFake": true
+            "videoSegments": output_segments
         }),
         artifacts: artifact_records,
     })?;
@@ -1841,12 +1888,8 @@ fn build_image_generation_snapshot(input: ImageGenerationSnapshotInput<'_>) -> V
         "inputPlan": input_plan,
         "seed": input.request.seed,
         "params": params_snapshot.clone(),
-        "providerOutputKind": "controlled_fake_bytes_converted_to_local_path",
+        "providerOutputKind": "provider_file",
         "providerImagePath": sanitize_snapshot_path(input.provider_image_path),
-        "billable": false,
-        "externalNetwork": false,
-        "mock": false,
-        "controlledFake": true,
         "sanitizedParamsSnapshot": params_snapshot,
         "providerOutputSummary": provider_output_summary
     })
@@ -1942,10 +1985,6 @@ fn build_video_generation_snapshot(input: VideoGenerationSnapshotInput<'_>) -> V
         "workflowType": "image_to_video",
         "seed": input.request.seed,
         "params": params_snapshot.clone(),
-        "billable": false,
-        "externalNetwork": false,
-        "mock": false,
-        "controlledFake": true,
         "sanitizedParamsSnapshot": params_snapshot,
         "providerOutput": sanitized_json(&input.provider_output)
     })
@@ -2149,6 +2188,79 @@ fn sanitize_snapshot_path(value: &str) -> String {
 fn is_absolute_snapshot_path(value: &str) -> bool {
     let normalized = value.replace('\\', "/");
     normalized.starts_with('/') || value.as_bytes().get(1).is_some_and(|byte| *byte == b':')
+}
+
+fn validate_provider_output_file(
+    storage: &StorageService,
+    bucket: FileBucket,
+    expected_relative_path: &str,
+    provider_output_path: &str,
+    provider_label: &str,
+) -> Result<StoredFile, TaskError> {
+    let returned = provider_output_path.trim();
+    if returned.is_empty() {
+        return Err(TaskError::from_code_with_detail(
+            "provider.output_missing",
+            format!("{provider_label} did not return an output path."),
+            Some(json!({ "expectedPath": expected_relative_path })),
+        ));
+    }
+    if is_absolute_snapshot_path(returned) {
+        return Err(TaskError::from_code_with_detail(
+            "provider.invalid_output_path",
+            format!("{provider_label} returned an absolute output path."),
+            Some(json!({
+                "expectedPath": expected_relative_path,
+                "returnedPath": sanitize_snapshot_path(returned)
+            })),
+        ));
+    }
+    if returned.replace('\\', "/") != expected_relative_path.replace('\\', "/") {
+        return Err(TaskError::from_code_with_detail(
+            "provider.invalid_output_path",
+            format!("{provider_label} returned an unexpected output path."),
+            Some(json!({
+                "expectedPath": expected_relative_path,
+                "returnedPath": sanitize_snapshot_path(returned)
+            })),
+        ));
+    }
+
+    let absolute_path = storage
+        .resolver()
+        .resolve_existing_bucket_path(bucket, expected_relative_path)
+        .map_err(|message| {
+            TaskError::from_code_with_detail(
+                "provider.output_missing",
+                format!("{provider_label} output file was not found in workspace."),
+                Some(json!({
+                    "expectedPath": expected_relative_path,
+                    "detail": message
+                })),
+            )
+        })?;
+    if !absolute_path.is_file() {
+        return Err(TaskError::from_code_with_detail(
+            "provider.output_missing",
+            format!("{provider_label} output path is not a file."),
+            Some(json!({ "expectedPath": expected_relative_path })),
+        ));
+    }
+
+    Ok(StoredFile {
+        bucket,
+        relative_path: storage
+            .resolver()
+            .relative_bucket_path(bucket, expected_relative_path)
+            .map_err(|message| {
+                TaskError::from_code_with_detail(
+                    "provider.invalid_output_path",
+                    format!("{provider_label} output path is invalid."),
+                    Some(json!({ "expectedPath": expected_relative_path, "detail": message })),
+                )
+            })?,
+        absolute_path,
+    })
 }
 
 fn resolve_image_generation_option(
@@ -3441,6 +3553,7 @@ fn usage_kind_for_image_kind(image_kind: &str) -> &'static str {
     }
 }
 
+#[cfg(test)]
 fn ensure_controlled_fake_image_provider(database: &Database) -> Result<(), String> {
     let repository = ProviderRepository::new(database);
     let providers = repository.list_providers()?;
@@ -3496,6 +3609,7 @@ fn ensure_controlled_fake_image_provider(database: &Database) -> Result<(), Stri
     Ok(())
 }
 
+#[cfg(test)]
 fn ensure_controlled_fake_video_provider(database: &Database) -> Result<(), String> {
     let repository = ProviderRepository::new(database);
     let providers = repository.list_providers()?;
@@ -3553,60 +3667,6 @@ fn ensure_controlled_fake_video_provider(database: &Database) -> Result<(), Stri
     Ok(())
 }
 
-fn ensure_controlled_fake_tts_provider(database: &Database) -> Result<(), String> {
-    let repository = ProviderRepository::new(database);
-    let providers = repository.list_providers()?;
-    if !providers
-        .iter()
-        .any(|provider| provider.provider_id == CONTROLLED_FAKE_TTS_PROVIDER_ID)
-    {
-        repository.upsert_provider(&ProviderRecord {
-            provider_id: CONTROLLED_FAKE_TTS_PROVIDER_ID.to_string(),
-            vendor: "controlled_fake".to_string(),
-            kind: "tts".to_string(),
-            display_name: "Controlled fake TTS provider".to_string(),
-            auth_type: "none".to_string(),
-            key_alias: None,
-            base_url: None,
-            status: "ready".to_string(),
-            enabled: true,
-            config_json: json!({ "adapter": "dummy", "externalNetwork": false, "billable": false }),
-        })?;
-    }
-
-    let models = repository.list_provider_models(Some(CONTROLLED_FAKE_TTS_PROVIDER_ID))?;
-    if !models
-        .iter()
-        .any(|model| model.model_id == CONTROLLED_FAKE_TTS_MODEL_ID)
-    {
-        repository.upsert_provider_model(&ProviderModelRecord {
-            model_id: CONTROLLED_FAKE_TTS_MODEL_ID.to_string(),
-            provider_id: CONTROLLED_FAKE_TTS_PROVIDER_ID.to_string(),
-            provider_model_id: CONTROLLED_FAKE_TTS_PROVIDER_MODEL_ID.to_string(),
-            display_name: "Controlled fake text-to-speech".to_string(),
-            capability: "text_to_speech".to_string(),
-            config_json: json!({
-                "providerKind": "tts",
-                "vendor": "controlled_fake",
-                "modelName": "controlled-fake-tts",
-                "abilityTypes": ["text_to_speech"],
-                "inputModalities": ["text"],
-                "outputModalities": ["audio"],
-                "inputRequirements": {},
-                "limits": {
-                    "sampleRates": [16000, 24000, 44100],
-                    "formats": ["mp3", "wav"]
-                },
-                "status": "ready",
-                "apiContractVerified": true
-            }),
-            enabled: true,
-        })?;
-    }
-
-    Ok(())
-}
-
 fn default_storyboard(project_id: String) -> StoryboardDto {
     let narrations = vec![
         narration(1, "很多人以为早睡只是自律。"),
@@ -3625,6 +3685,84 @@ fn default_storyboard(project_id: String) -> StoryboardDto {
                 storyboard_item(project_id.clone(), item.index, item.text.clone(), item.text)
             })
             .collect(),
+    }
+}
+
+fn initial_storyboard_from_project(
+    database: &Database,
+    project_id: &str,
+) -> Result<Option<StoryboardDto>, String> {
+    let Some(detail) = ProjectRepository::new(database).get_detail(project_id)? else {
+        return Ok(None);
+    };
+    let Some(segments) = confirmed_segments_from_input_options(&detail.project.input_options)
+    else {
+        return Ok(None);
+    };
+
+    let items = segments
+        .into_iter()
+        .enumerate()
+        .map(|(index, segment)| {
+            storyboard_item(
+                project_id.to_string(),
+                (index + 1) as u32,
+                segment.source_text,
+                segment.narration_text,
+            )
+        })
+        .collect::<Vec<_>>();
+    let confirmed_narrations = items.iter().map(storyboard_item_to_narration).collect();
+
+    Ok(Some(StoryboardDto {
+        storyboard_id: format!("storyboard_{project_id}"),
+        project_id: project_id.to_string(),
+        confirmed_narrations,
+        review_status: "waiting_user".to_string(),
+        items,
+    }))
+}
+
+#[derive(Debug, Clone)]
+struct ConfirmedInputSegment {
+    source_text: String,
+    narration_text: String,
+}
+
+fn confirmed_segments_from_input_options(
+    input_options: &Value,
+) -> Option<Vec<ConfirmedInputSegment>> {
+    let segments = input_options.get("confirmedSegments")?.as_array()?;
+    let parsed = segments
+        .iter()
+        .filter_map(|segment| {
+            let source_text = segment
+                .get("sourceText")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            if source_text.is_empty() {
+                return None;
+            }
+            let narration_text = segment
+                .get("narrationText")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or(source_text.as_str())
+                .to_string();
+            Some(ConfirmedInputSegment {
+                source_text,
+                narration_text,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    if parsed.is_empty() {
+        None
+    } else {
+        Some(parsed)
     }
 }
 
@@ -3712,6 +3850,7 @@ fn storyboard_item(
     source_text: String,
     narration_text: String,
 ) -> SceneDto {
+    let item_id = format!("{project_id}_item_{index}");
     let (visual_description, scene_description, image_prompt, video_prompt) = match index {
         1 => (
             "清晨卧室，主角醒来。",
@@ -3734,7 +3873,7 @@ fn storyboard_item(
     };
 
     SceneDto {
-        item_id: format!("item_{index}"),
+        item_id,
         project_id,
         index,
         source_text,
@@ -3935,35 +4074,70 @@ fn stable_hash_text(value: &str) -> String {
     format!("{hash:016x}")
 }
 
-fn controlled_fake_png_bytes(revision: u32, variant_index: u32) -> Vec<u8> {
-    // Minimal valid 1x1 PNG. The metadata is stored in DB; the pixel payload only proves file persistence.
-    let mut bytes = vec![
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44,
-        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90,
-        0x77, 0x53, 0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0xF8,
-        0xCF, 0xC0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00, 0x18, 0xDD, 0x8D, 0xB0, 0x00, 0x00, 0x00,
-        0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
-    ];
-    bytes.push((revision % 255) as u8);
-    bytes.push((variant_index % 255) as u8);
-    bytes
-}
-
-fn controlled_fake_mp4_bytes(revision: u32, variant_index: u32) -> Vec<u8> {
-    let mut bytes =
-        b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2mp41\x00\x00\x00\x08free".to_vec();
-    bytes.push((revision % 255) as u8);
-    bytes.push((variant_index % 255) as u8);
-    bytes
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::project_repository::ProjectRepository;
     use crate::domain::project::CreateProjectRequest;
     use std::fs;
     use std::path::PathBuf;
+
+    #[test]
+    fn get_storyboard_uses_confirmed_segments_and_persists_items() {
+        let root = test_root("storyboard_confirmed_segments");
+        let database = Database::open(root.join("app.sqlite3")).expect("database should open");
+        let workspace_root = root.join("workspace");
+        StorageService::new(&workspace_root)
+            .initialize_workspace()
+            .expect("workspace should init");
+        ProjectRepository::new(&database)
+            .create_with_id(
+                "project_confirmed_segments".to_string(),
+                CreateProjectRequest {
+                    title: "confirmed segments".to_string(),
+                    workflow_type: "image_to_video".to_string(),
+                    input_type: "paste".to_string(),
+                    topic: None,
+                    source_text: Some("旧原文不应重新切分".to_string()),
+                    source_text_path: None,
+                    content_language: "zh-CN".to_string(),
+                    tone: None,
+                    aspect_ratio: "9:16".to_string(),
+                    target_scene_count: 8,
+                    segment_duration_seconds: 4.0,
+                    style_prompt: None,
+                    active_pack_id: None,
+                    rule_refs: None,
+                    executable_refs: None,
+                    input_process_mode: "fixed".to_string(),
+                    input_options: Some(json!({
+                        "splitMode": "paragraph",
+                        "confirmedSegments": [
+                            { "index": 1, "sourceText": "第一段确认原文", "narrationText": "第一段确认旁白" },
+                            { "index": 2, "sourceText": "第二段确认原文", "narrationText": "第二段确认旁白" }
+                        ]
+                    })),
+                },
+            )
+            .expect("project should create");
+
+        let storyboard = get_storyboard(&database, "project_confirmed_segments".to_string())
+            .expect("storyboard should build from confirmed segments");
+
+        assert_eq!(storyboard.items.len(), 2);
+        assert_eq!(storyboard.items[0].source_text, "第一段确认原文");
+        assert_eq!(storyboard.items[0].narration_text, "第一段确认旁白");
+        assert_eq!(storyboard.items[1].source_text, "第二段确认原文");
+        assert_eq!(storyboard.confirmed_narrations[0].text, "第一段确认旁白");
+        let persisted = SceneRepository::new(&database)
+            .get_storyboard("project_confirmed_segments")
+            .expect("storyboard should read")
+            .expect("storyboard should persist");
+        assert_eq!(persisted.items.len(), 2);
+        assert_eq!(persisted.items[0].source_text, "第一段确认原文");
+        assert_eq!(persisted.items[1].narration_text, "第二段确认旁白");
+
+        cleanup(root);
+    }
 
     #[test]
     fn apply_script_draft_rejects_invalid_schema_without_overwriting_storyboard() {

@@ -3,6 +3,7 @@ export const tauriCommands = {
   listProjects: 'list_projects',
   getProjectDetail: 'get_project_detail',
   updateProject: 'update_project',
+  updateProjectLifecycle: 'update_project_lifecycle',
   generateProjectCover: 'generate_project_cover',
   replaceProjectCoverImage: 'replace_project_cover_image',
   importNovel: 'import_novel',

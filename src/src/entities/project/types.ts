@@ -86,6 +86,19 @@ export interface CreateProjectRequest {
   inputOptions?: Record<string, unknown>
 }
 
+export interface UpdateProjectRequest {
+  projectId: string
+  patch: Partial<Pick<ProjectDto, 'title' | 'sourceText' | 'sourceTextPath' | 'inputOptions' | 'aspectRatio' | 'targetSceneCount' | 'segmentDurationSeconds' | 'stylePrompt' | 'activePackId' | 'ruleRefs' | 'executableRefs' | 'coverTitle' | 'tone' | 'contentLanguage'> & {
+    topic: string
+    contentCategory: string
+  }>
+}
+
+export interface UpdateProjectLifecycleRequest {
+  projectId: string
+  lifecycle: ProjectLifecycle
+}
+
 export interface GenerateProjectCoverRequest {
   projectId: string
   coverTitle?: string

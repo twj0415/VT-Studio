@@ -4,6 +4,7 @@ use crate::core::result::AppResult;
 use crate::domain::project::{
     CreateProjectRequest, GenerateProjectCoverRequest, ListProjectsRequest, PageResult,
     ProjectDetailDto, ProjectSummaryDto, ReplaceProjectCoverImageRequest,
+    UpdateProjectLifecycleRequest, UpdateProjectRequest,
 };
 use crate::services::project_service;
 use tauri::State;
@@ -36,9 +37,18 @@ pub fn get_project_detail(
 #[tauri::command]
 pub fn update_project(
     state: State<'_, AppState>,
-    project_id: String,
+    request: UpdateProjectRequest,
 ) -> AppResult<ProjectDetailDto> {
-    project_service::update_project(state.database(), project_id).map_err(AppErrorDto::from)
+    project_service::update_project(state.database(), state.workspace_root(), request)
+        .map_err(AppErrorDto::from)
+}
+
+#[tauri::command]
+pub fn update_project_lifecycle(
+    state: State<'_, AppState>,
+    request: UpdateProjectLifecycleRequest,
+) -> AppResult<ProjectDetailDto> {
+    project_service::update_project_lifecycle(state.database(), request).map_err(AppErrorDto::from)
 }
 
 #[tauri::command]

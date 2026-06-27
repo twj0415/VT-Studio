@@ -1,13 +1,13 @@
 <template>
   <section class="view h-full min-w-0 overflow-hidden bg-page text-primary">
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
-      <WorkspaceHeader :project-id="projectId" :project-title="projectTitle" current-step="video" :access="workspaceAccess" :back-to="`/projects/${projectId}/workspace/image`" :badge-label="isMockVideoFlow ? t('videoGeneration.mockBadge') : ''" right-width-class="w-[500px]" :usage="resourceUsage" @blocked="handleBlockedStep">
+      <WorkspaceHeader :project-id="projectId" :project-title="projectTitle" current-step="video" :access="workspaceAccess" :back-to="`/projects/${projectId}/workspace/image`" right-width-class="w-[500px]" :usage="resourceUsage" @blocked="handleBlockedStep">
         <template #actions>
           <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm border border-border-strong px-vt-3 text-sm font-medium text-secondary transition hover:bg-card hover:text-primary disabled:cursor-not-allowed disabled:opacity-50" :disabled="dirtyItemIds.size === 0 || isSavingAll" @click="handleSaveAll">{{ t('videoGeneration.saveAll') }}</button>
           <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm border border-border-strong px-vt-3 text-sm font-medium text-secondary transition hover:bg-card hover:text-primary disabled:cursor-not-allowed disabled:opacity-50" :disabled="isBulkGenerating || isBulkGeneratingTts" @click="handleGenerateMissingTts">{{ t('videoGeneration.generateMissingTts') }}</button>
           <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm border border-border-strong px-vt-3 text-sm font-medium text-secondary transition hover:bg-card hover:text-primary disabled:cursor-not-allowed disabled:opacity-50" :disabled="isBulkGenerating" @click="handleGenerateMissing">{{ t('videoGeneration.generateMissing') }}</button>
           <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm border border-border-strong px-vt-3 text-sm font-medium text-secondary transition hover:bg-card hover:text-primary disabled:cursor-not-allowed disabled:opacity-50" :disabled="isBulkGenerating" @click="handleGenerateAll">{{ t('videoGeneration.generateAll') }}</button>
-          <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm bg-accent px-vt-4 text-sm font-semibold text-accent-ink transition hover:brightness-110" @click="handleEnterComposition">{{ t('videoGeneration.enterComposition') }}</button>
+          <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm bg-accent px-vt-4 text-sm font-semibold text-accent-ink transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!canEnterCompositionStep" :title="enterCompositionTitle" @click="handleEnterComposition">{{ t('videoGeneration.enterComposition') }}</button>
         </template>
       </WorkspaceHeader>
 
@@ -49,7 +49,7 @@
                   </td>
                   <td class="border-b border-border px-vt-2 py-vt-2">
                     <div class="grid h-[116px] grid-rows-[1fr_auto] gap-vt-1 rounded-vt-sm border border-border bg-page p-vt-2 text-xs">
-                      <div class="grid place-items-center rounded-vt-sm border border-border text-[10px] font-semibold uppercase text-primary" :class="selectedImagePreviewClass(item)">{{ t('videoGeneration.imageMockShort') }}</div>
+                      <div class="grid place-items-center rounded-vt-sm border border-border text-[10px] font-semibold uppercase text-primary" :class="selectedImagePreviewClass(item)">{{ selectedImagePreviewLabel(item) }}</div>
                       <div class="truncate text-muted">{{ selectedImage(item)?.imagePath ?? t('videoGeneration.noSelectedImage') }}</div>
                     </div>
                   </td>
@@ -105,7 +105,7 @@
                   <td class="border-b border-border px-vt-2 py-vt-2">
                     <div v-if="item.videoSegments.length > 0" class="grid h-[116px] grid-cols-2 gap-vt-1 overflow-y-auto">
                       <div v-for="segment in sortedVideoSegments(item)" :key="segment.segmentId" class="grid min-h-[54px] grid-cols-[44px_1fr] items-center gap-vt-2 rounded-vt-sm border px-vt-2 py-vt-1 text-left text-[11px] leading-4 transition" :class="segmentButtonClass(item, segment)">
-                        <span class="grid h-9 w-11 place-items-center rounded-vt-sm border border-border bg-card-hover text-[9px] font-semibold uppercase text-primary">{{ t('videoGeneration.segmentMockShort') }}</span>
+                        <span class="grid h-9 w-11 place-items-center rounded-vt-sm border border-border bg-card-hover text-[9px] font-semibold uppercase text-primary">{{ segmentPreviewLabel(segment) }}</span>
                         <span class="min-w-0">
                           <span class="block truncate font-semibold">{{ shortId(segment.segmentId) }}</span>
                           <span class="block truncate text-muted">{{ t('videoGeneration.revisionLabel', { revision: segmentRevision(segment) }) }} · {{ segmentFreshnessLabel(item, segment) }}</span>
@@ -269,7 +269,9 @@ const subtitleEditorText = ref('')
 const storyboardItems = computed(() => storyboardStore.storyboard?.items ?? [])
 const workspaceAccess = computed(() => getWorkspaceStepAccess(storyboardItems.value, storyboardStore.storyboard?.reviewStatus))
 const projectTitle = computed(() => (projectStore.currentProject?.project.projectId === projectId ? projectStore.currentProject.project.title : projectId))
-const isMockVideoFlow = computed(() => storyboardItems.value.some((item) => item.videoPrompt.startsWith('MOCK') || item.videoSegments.some((segment) => segment.providerModelId.startsWith('mock'))))
+const firstCompositionEntryIssue = computed(() => validateStoryboardItemsForComposition(storyboardItems.value)[0] ?? null)
+const canEnterCompositionStep = computed(() => !firstCompositionEntryIssue.value)
+const enterCompositionTitle = computed(() => (firstCompositionEntryIssue.value ? formatCompositionEntryIssue(firstCompositionEntryIssue.value) : t('videoGeneration.enterComposition')))
 const videoResetCount = computed(() => storyboardItems.value.filter((item) => videoResetRecord(item)).length)
 const bulkVideoLockedCount = computed(() => storyboardItems.value.filter(isStoryboardItemLockedForBulkVideoGeneration).length)
 const subtitleEditorPreviewLines = computed(() => subtitleEditorText.value.split('\n').map((line) => line.trim()).filter(Boolean).slice(0, 2))
@@ -605,6 +607,12 @@ function selectedImagePreviewClass(item: StoryboardItemDto) {
   return 'scene-preview-tone-0'
 }
 
+function selectedImagePreviewLabel(item: StoryboardItemDto) {
+  const image = selectedImage(item)
+  if (!image) return '-'
+  return shortId(image.imageId)
+}
+
 function selectedSegment(item: StoryboardItemDto) {
   return item.videoSegments.find((segment) => segment.segmentId === item.selectedVideoSegmentId || segment.selected) ?? null
 }
@@ -642,6 +650,10 @@ function segmentRevision(segment: VideoSegmentDto) {
 function segmentVariantIndex(segment: VideoSegmentDto) {
   const variantIndex = segment.generationContextSnapshot.variantIndex
   return typeof variantIndex === 'number' && Number.isFinite(variantIndex) ? variantIndex : 1
+}
+
+function segmentPreviewLabel(segment: VideoSegmentDto) {
+  return `#${String(segmentVariantIndex(segment)).padStart(2, '0')}`
 }
 
 function segmentButtonClass(item: StoryboardItemDto, segment: VideoSegmentDto) {
@@ -689,8 +701,12 @@ function audioErrorReason(item: StoryboardItemDto) {
 }
 
 function showFirstCompositionIssue(issue: { index: number; fields: StoryboardCompositionEntryField[] }) {
+  message.error(formatCompositionEntryIssue(issue))
+}
+
+function formatCompositionEntryIssue(issue: { index: number; fields: StoryboardCompositionEntryField[] }) {
   const fields = issue.fields.map((field) => t(`videoGeneration.validation.fields.${field}`)).join('、')
-  message.error(t('videoGeneration.validation.enterCompositionBlocked', { index: issue.index, fields }))
+  return t('videoGeneration.validation.enterCompositionBlocked', { index: issue.index, fields })
 }
 
 function handleBlockedStep(step: WorkspaceStepKey) {

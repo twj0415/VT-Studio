@@ -5,7 +5,6 @@ import { getTaskDetail } from '@/entities/task/api'
 import type { CompositionTaskDto, StartCompositionRequest } from '@/entities/task/types'
 import type { GeneratedImageAssetDto, GenerateSubtitlesRequest, GenerateSubtitlesResultDto, ImageCandidateDto, NarrationDto, ProbeStoryboardAudioRequest, RegenerateStoryboardRequest, ReplaceStoryboardAudioRequest, SceneDto, StartImageAssetGenerationRequest, StartTtsGenerationRequest, StoryboardDto, StoryboardItemDto, UpdateStoryboardSubtitlesRequest, VideoSegmentDto } from './types'
 import { applyStoryboardDownstreamReset } from './reset'
-import { getApiAdapter } from '@/shared/api/invoke'
 
 export const useSceneStore = defineStore('scene', {
   state: () => ({
@@ -76,21 +75,11 @@ export const useSceneStore = defineStore('scene', {
     },
     async generateImages(projectId: string, itemId: string, count = 4) {
       const candidates = await startImageGeneration(projectId, itemId, count)
-      if (getApiAdapter() === 'tauri') {
-        this.storyboard = await getStoryboard(projectId)
-        this.narrations = this.storyboard.confirmedNarrations
-        this.imageCandidates = this.storyboard.items.flatMap((item) => item.imageCandidates)
-        this.videoSegments = this.storyboard.items.flatMap((item) => item.videoSegments)
-        this.savedItemsById = createSavedItemsById(this.storyboard.items)
-        return candidates
-      }
-
-      this.imageCandidates = await listImageCandidates(projectId)
-      if (this.storyboard) {
-        this.storyboard.items = this.storyboard.items.map((item) => (item.itemId === itemId ? { ...item, imageStatus: 'succeeded', imageLastErrorJson: null, status: 'succeeded', imageCandidates: this.imageCandidates.filter((candidate) => candidate.itemId === itemId) } : item))
-        const updated = this.storyboard.items.find((item) => item.itemId === itemId)
-        if (updated) this.savedItemsById[itemId] = cloneStoryboardItem(updated)
-      }
+      this.storyboard = await getStoryboard(projectId)
+      this.narrations = this.storyboard.confirmedNarrations
+      this.imageCandidates = this.storyboard.items.flatMap((item) => item.imageCandidates)
+      this.videoSegments = this.storyboard.items.flatMap((item) => item.videoSegments)
+      this.savedItemsById = createSavedItemsById(this.storyboard.items)
       return candidates
     },
     async generateImageAsset(request: StartImageAssetGenerationRequest) {
@@ -166,21 +155,11 @@ export const useSceneStore = defineStore('scene', {
     },
     async generateVideos(projectId: string, itemId: string) {
       const segments = await startVideoGeneration(projectId, itemId)
-      if (getApiAdapter() === 'tauri') {
-        this.storyboard = await getStoryboard(projectId)
-        this.narrations = this.storyboard.confirmedNarrations
-        this.imageCandidates = this.storyboard.items.flatMap((item) => item.imageCandidates)
-        this.videoSegments = this.storyboard.items.flatMap((item) => item.videoSegments)
-        this.savedItemsById = createSavedItemsById(this.storyboard.items)
-        return segments
-      }
-
-      this.videoSegments = await listVideoSegments(projectId)
-      if (this.storyboard) {
-        this.storyboard.items = this.storyboard.items.map((item) => (item.itemId === itemId ? { ...item, videoStatus: 'succeeded', segmentStatus: 'succeeded', videoSegments: this.videoSegments.filter((segment) => segment.itemId === itemId) } : item))
-        const updated = this.storyboard.items.find((item) => item.itemId === itemId)
-        if (updated) this.savedItemsById[itemId] = cloneStoryboardItem(updated)
-      }
+      this.storyboard = await getStoryboard(projectId)
+      this.narrations = this.storyboard.confirmedNarrations
+      this.imageCandidates = this.storyboard.items.flatMap((item) => item.imageCandidates)
+      this.videoSegments = this.storyboard.items.flatMap((item) => item.videoSegments)
+      this.savedItemsById = createSavedItemsById(this.storyboard.items)
       return segments
     },
     async selectVideo(itemId: string, segmentId: string) {
@@ -207,13 +186,7 @@ export const useSceneStore = defineStore('scene', {
     async startComposition(request: StartCompositionRequest) {
       this.currentCompositionTask = await startComposition(request)
       this.compositionTasks = [this.currentCompositionTask, ...this.compositionTasks.filter((task) => task.taskId !== this.currentCompositionTask?.taskId)]
-      if (getApiAdapter() === 'tauri') {
-        await this.loadStoryboard(request.projectId)
-      } else if (this.storyboard) {
-        const segmentIds = new Set(this.currentCompositionTask.segmentIds)
-        this.storyboard.items = this.storyboard.items.map((item) => (item.selectedVideoSegmentId && segmentIds.has(item.selectedVideoSegmentId) ? clearCompositionResetRecords(item) : item))
-        this.savedItemsById = createSavedItemsById(this.storyboard.items)
-      }
+      await this.loadStoryboard(request.projectId)
       return this.currentCompositionTask
     },
     async loadCompositionTask(taskId: string) {
@@ -221,7 +194,6 @@ export const useSceneStore = defineStore('scene', {
       return this.currentCompositionTask
     },
     async syncLatestCompositionTask(projectId: string) {
-      if (getApiAdapter() !== 'tauri') return null
       try {
         const task = await getTaskDetail(projectId)
         this.currentCompositionTask = task.compositionTask ?? null
@@ -252,15 +224,5 @@ function cloneStoryboardItem(item: StoryboardItemDto): StoryboardItemDto {
     imageCandidates: item.imageCandidates.map((candidate) => ({ ...candidate, generationContextSnapshot: { ...candidate.generationContextSnapshot } })),
     videoSegments: item.videoSegments.map((segment) => ({ ...segment, generationContextSnapshot: { ...segment.generationContextSnapshot } })),
     downstreamResetRecords: item.downstreamResetRecords?.map((record) => ({ ...record, affectedObjects: [...record.affectedObjects] })),
-  }
-}
-
-function clearCompositionResetRecords(item: StoryboardItemDto): StoryboardItemDto {
-  const downstreamResetRecords = item.downstreamResetRecords?.filter((record) => !record.affectedObjects.includes('composition'))
-
-  return {
-    ...item,
-    renderStatus: 'succeeded',
-    downstreamResetRecords,
   }
 }
