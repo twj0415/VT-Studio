@@ -39,3 +39,9 @@ Desktop.ini
 # Tauri generated artifacts
 src-tauri/target/
 src/dist/
+
+# Local sidecar runtimes. Materialize them locally with scripts instead of committing binaries.
+sidecars/chromium/
+sidecars/chromium.exe
+sidecars/node.exe
+sidecars/ms-playwright*/

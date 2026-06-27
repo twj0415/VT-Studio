@@ -1,6 +1,8 @@
 # 数据库 Schema 与迁移规范
 
 > 这篇定义 SQLite 落地结构、迁移规则和事务边界。字段含义看 `数据结构.md`，枚举取值看 `01-枚举字典与配置规范.md`。代码实现时不得绕过本规范私建表、私造字段。
+>
+> 注意：本文包含目标 Schema 和阶段性扩展 Schema。当前 Rust migration 的真实状态必须以 `src-tauri/src/db/mod.rs`、`plan/当前实现审计.md` 和当前 TODO 完成记录为准。文档中标注 TODO-08 的字段或表，在对应 migration 落地前不能被代码当成已存在字段读取。
 
 ## 一、核心原则
 
@@ -57,6 +59,7 @@ image_candidates         生图候选图
 video_segments           图生视频片段
 composition_tasks        合成任务
 novel_chapters           小说章节，仅小说入口
+video_packs              视频包，TODO-08 完整落库；当前未落地时不得假装可用
 assets                   统一资产库
 asset_references         资产引用关系
 tasks                    任务主表
@@ -80,6 +83,8 @@ histories                历史记录
 
 ### projects
 
+当前代码的 `projects` 表已经支持主线草稿和输入配置；下列 `active_pack_id / rule_refs_json / executable_refs_json` 是视频包和规则引用的目标扩展字段，完整落地放到 TODO-08。实现前必须新增 migration，并同步 Project DTO、Repository、前端类型和测试。
+
 ```sql
 CREATE TABLE projects (
   project_id TEXT PRIMARY KEY,
@@ -99,6 +104,9 @@ CREATE TABLE projects (
   target_scene_count INTEGER NOT NULL,
   segment_duration_seconds REAL NOT NULL DEFAULT 4,
   style_prompt TEXT,
+  active_pack_id TEXT,
+  rule_refs_json TEXT NOT NULL DEFAULT '{}',
+  executable_refs_json TEXT NOT NULL DEFAULT '{}',
   project_lifecycle TEXT NOT NULL,
   cover_path TEXT,
   cover_title TEXT,
@@ -129,9 +137,12 @@ CREATE INDEX idx_projects_workflow_type ON projects(workflow_type);
 6. input_process_mode 必须持久化，不能只由 input_type 临时推导。
 7. input_options_json 存入口相关参数，例如 paste 的 split_mode。
 8. content_category 只表示内容类别，不承担 workflow_type 职责。
-9. 新建项目立即写入 draft，后续编辑通过 update 接口自动保存到 SQLite。
+9. 点击“开始创作”立即写入 draft，后续编辑通过 update 接口自动保存到 SQLite。
 10. 前端 dirty 状态只用于交互提示，不能替代数据库草稿。
 11. 应用重启后项目详情必须能从 SQLite + 相对路径文件恢复。
+12. active_pack_id 只保存创建作品时选择的视频包 ID；作品内覆盖不反向修改视频包。
+13. rule_refs_json 保存当前作品实际使用的创作规则引用，只存 rule_key / rule_id，不复制 prompt 正文。
+14. executable_refs_json 保存当前作品实际使用的 provider_model_id / workflow_preset_id，不保存 Provider 连接和密钥。
 ```
 
 ---
@@ -401,9 +412,90 @@ CREATE TABLE novel_chapters (
 
 ---
 
-## 八、资产表
+## 八、创作资源配置表
+
+### video_packs
+
+视频包是“默认策略组合”，不等于创作规则正文、模型配置、素材库或模板市场。TODO-08 实现视频包管理时必须落到本表或等价 Repository，不允许只写前端静态数组。
+
+当前实现差异：
+
+```text
+1. 当前代码已有“创作资源”入口和创作规则管理，视频包仍主要是页面占位 / 文档目标。
+2. video_packs 表、Repository、DTO、引用关系检查是 TODO-08 必做项。
+3. 在 video_packs migration 落地前，不能让用户保存视频包，也不能让 Project 依赖不存在的 active_pack_id。
+```
+
+```sql
+CREATE TABLE video_packs (
+  pack_id TEXT PRIMARY KEY,
+  source_type TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  applicable_input_types_json TEXT NOT NULL DEFAULT '[]',
+  content_category TEXT,
+  default_tone TEXT,
+  default_aspect_ratio TEXT NOT NULL,
+  default_duration_seconds INTEGER NOT NULL,
+  default_scene_count INTEGER NOT NULL,
+  rule_refs_json TEXT NOT NULL DEFAULT '{}',
+  recommended_executable_refs_json TEXT NOT NULL DEFAULT '{}',
+  asset_refs_json TEXT NOT NULL DEFAULT '[]',
+  is_enabled INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+```
+
+规则：
+
+```text
+1. source_type 只能是 builtin / user；builtin 不可直接编辑，用户修改时复制为 user。
+2. rule_refs_json 只保存 rule_key / rule_id，不保存 prompt_body。
+3. recommended_executable_refs_json 只保存 provider_model_id 或 workflow_preset_id，不保存 Provider 连接配置。
+4. asset_refs_json 只保存素材库引用 ID，不保存素材文件内容。
+5. 删除 user 视频包前检查 projects.active_pack_id、projects.rule_refs_json、tasks.snapshot_json 和 task_steps.input_json 是否引用。
+6. 保存当前作品配置为新视频包时，只保存引用、默认参数和素材引用，不能保存真实密钥、任务产物目录、本地绝对路径或完整 prompt 历史。
+```
+
+索引：
+
+```sql
+CREATE INDEX idx_video_packs_source_enabled ON video_packs(source_type, is_enabled);
+CREATE INDEX idx_video_packs_category ON video_packs(content_category);
+```
+
+---
+
+## 九、资产表
 
 ### assets
+
+当前代码实现差异：
+
+```text
+当前 `src-tauri/src/db/mod.rs` 已落地的 assets 表使用简化字段：
+  asset_id
+  kind
+  relative_path
+  source_kind
+  mime_type
+  size_bytes
+  checksum
+  is_builtin
+  lifecycle
+  metadata_json
+  created_at / updated_at
+
+文档中的 asset_kind / media_kind / source_type / width / height / duration_seconds 是目标语义。
+TODO-08 8.1 不强制重建 assets 表；优先用现有字段表达：
+  asset_kind   → kind
+  source_type  → source_kind
+  media_kind   → mime_type 或 metadata_json 派生
+  width/height/duration/preview/displayName → metadata_json
+
+如果后续确实需要把这些语义升成强类型列，必须新增 migration、DTO、Repository 和回填测试，不能只改页面。
+```
 
 ```sql
 CREATE TABLE assets (
@@ -431,6 +523,13 @@ CREATE TABLE assets (
 
 ### asset_references
 
+当前代码实现差异：
+
+```text
+当前 asset_references 已落地字段为 reference_id / asset_id / owner_kind / owner_id / usage_kind / created_at，外键 ON DELETE RESTRICT。
+TODO-08 8.1 需要补 delete_asset_reference，用“解除引用 → 再删除资产”的流程替代直接级联删除。
+```
+
 ```sql
 CREATE TABLE asset_references (
   reference_id TEXT PRIMARY KEY,
@@ -453,7 +552,7 @@ CREATE TABLE asset_references (
 
 ---
 
-## 九、任务表
+## 十、任务表
 
 ### tasks
 
@@ -533,7 +632,7 @@ CREATE INDEX idx_task_steps_task_order ON task_steps(task_id, order_index);
 
 ---
 
-## 十、产物表
+## 十一、产物表
 
 ```sql
 CREATE TABLE artifacts (
@@ -561,7 +660,7 @@ CREATE TABLE artifacts (
 
 ---
 
-## 十一、Provider 与配置表
+## 十二、Provider 与配置表
 
 ### providers
 
@@ -656,7 +755,7 @@ CREATE TABLE app_configs (
 
 ---
 
-## 十二、模板和 Prompt 表
+## 十三、模板和 Prompt 表
 
 ```sql
 CREATE TABLE prompt_templates (
@@ -673,6 +772,22 @@ CREATE TABLE prompt_templates (
   updated_at INTEGER NOT NULL,
   UNIQUE(template_key, version)
 );
+```
+
+`prompt_templates` 是当前创作规则 / PromptSkill 的元数据落点之一。当前代码也允许以文件系统 `creative-rules/builtin` 和 `creative-rules/user` 管理规则正文；不论采用 DB 还是文件，用户侧统一叫“创作规则”，DTO 字段必须对齐 `CreativeRule`：
+
+```text
+rule_id / key / name / module / provider_kind / output_schema / description / source_type / enabled / body / relative_path
+```
+
+规则：
+
+```text
+1. Vue 页面不得写大段 prompt 正文。
+2. builtin 规则不可直接编辑。
+3. user 规则保存前必须校验 output_schema，并拒绝疑似密钥。
+4. 视频包和 Project 只引用 rule_key / rule_id，不复制 body。
+5. 创作规则不能执行 JS / TS / Python，也不能直接写业务表。
 ```
 
 ```sql
@@ -693,7 +808,7 @@ CREATE TABLE templates (
 
 ---
 
-## 十三、历史记录表
+## 十四、历史记录表
 
 ```sql
 CREATE TABLE histories (
@@ -713,7 +828,7 @@ CREATE TABLE histories (
 
 ---
 
-## 十四、迁移规范
+## 十五、迁移规范
 
 迁移文件命名：
 
@@ -733,7 +848,7 @@ YYYYMMDDHHMMSS_describe_change.sql
 
 ---
 
-## 十五、事务边界
+## 十六、事务边界
 
 必须事务化：
 
@@ -761,7 +876,7 @@ YYYYMMDDHHMMSS_describe_change.sql
 
 ---
 
-## 十六、Repository 规则
+## 十七、Repository 规则
 
 ```text
 1. Repository 只接受已经校验过的 DTO/Model。

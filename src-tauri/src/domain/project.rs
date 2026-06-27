@@ -24,6 +24,13 @@ pub struct ProjectDto {
     pub target_scene_count: u32,
     pub segment_duration_seconds: f64,
     pub style_prompt: Option<String>,
+    pub active_pack_id: Option<String>,
+    pub rule_refs: Value,
+    pub executable_refs: Value,
+    pub cover_path: Option<String>,
+    pub cover_title: Option<String>,
+    pub cover_template_id: Option<String>,
+    pub cover_source_item_id: Option<String>,
     pub tone: Option<String>,
     pub content_language: String,
     pub lifecycle: String,
@@ -55,6 +62,9 @@ pub struct ProjectDetailDto {
 #[serde(rename_all = "camelCase")]
 pub struct NamedProjectAssetDto {
     pub id: String,
+    pub style_id: Option<String>,
+    pub character_id: Option<String>,
+    pub location_id: Option<String>,
     pub name: String,
 }
 
@@ -93,6 +103,28 @@ pub struct CreateProjectRequest {
     pub target_scene_count: u32,
     pub segment_duration_seconds: f64,
     pub style_prompt: Option<String>,
+    pub active_pack_id: Option<String>,
+    pub rule_refs: Option<Value>,
+    pub executable_refs: Option<Value>,
     pub input_process_mode: String,
     pub input_options: Option<Value>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerateProjectCoverRequest {
+    pub project_id: String,
+    pub cover_title: Option<String>,
+    pub cover_template_id: Option<String>,
+    pub cover_source_item_id: Option<String>,
+    pub source_image_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceProjectCoverImageRequest {
+    pub project_id: String,
+    pub source_path: String,
+    pub cover_title: Option<String>,
+    pub cover_template_id: Option<String>,
 }

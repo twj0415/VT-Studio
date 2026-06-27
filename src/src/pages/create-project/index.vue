@@ -52,6 +52,29 @@
 
         <aside class="flex min-h-0 w-full flex-none flex-col gap-vt-5 overflow-y-auto xl:w-96">
           <section class="rounded-vt-md border border-border bg-card p-vt-5 shadow-vt-md">
+            <div class="flex items-center gap-vt-3">
+              <h3 class="text-sm font-semibold">{{ t('createProject.videoPackTitle') }}</h3>
+              <n-button class="ml-auto" size="tiny" :loading="isLoadingPacks" @click="loadVideoPacks">{{ t('creativeResources.packs.refresh') }}</n-button>
+            </div>
+            <p class="mt-vt-2 text-xs leading-5 text-muted">{{ t('createProject.videoPackHint') }}</p>
+            <div class="mt-vt-4 grid gap-vt-2">
+              <button v-for="pack in selectablePacks" :key="pack.packId" type="button" class="rounded-vt-sm border p-vt-3 text-left transition" :class="entryCardClass(form.activePackId === pack.packId)" @click="selectVideoPack(pack)">
+                <div class="flex min-w-0 items-center gap-vt-2">
+                  <span class="min-w-0 truncate text-sm font-semibold text-primary">{{ pack.name }}</span>
+                  <span class="ml-auto rounded-vt-sm border border-border bg-page px-vt-2 py-0.5 text-[11px] text-muted">{{ pack.sourceType }}</span>
+                </div>
+                <p class="mt-vt-1 line-clamp-2 text-xs leading-5 text-muted">{{ pack.description }}</p>
+                <div class="mt-vt-2 flex flex-wrap gap-vt-1 text-[11px] text-secondary">
+                  <span class="rounded-vt-sm border border-border bg-page px-vt-2 py-0.5">{{ pack.defaultAspectRatio }}</span>
+                  <span class="rounded-vt-sm border border-border bg-page px-vt-2 py-0.5">{{ t('createProject.packSceneCount', { count: pack.defaultSceneCount }) }}</span>
+                  <span class="rounded-vt-sm border border-border bg-page px-vt-2 py-0.5">{{ t('createProject.packDuration', { seconds: pack.defaultDurationSeconds }) }}</span>
+                </div>
+              </button>
+              <div v-if="selectablePacks.length === 0" class="rounded-vt-sm border border-border bg-page p-vt-3 text-xs text-muted">{{ t('createProject.noVideoPacks') }}</div>
+            </div>
+          </section>
+
+          <section class="rounded-vt-md border border-border bg-card p-vt-5 shadow-vt-md">
             <h3 class="text-sm font-semibold">{{ t('createProject.contentSettingsTitle') }}</h3>
             <div class="mt-vt-4 space-y-vt-5">
               <label class="block">
@@ -109,17 +132,19 @@
 
     <footer class="flex w-full flex-none items-center justify-end gap-vt-3 border-t border-border bg-panel px-vt-6 py-vt-4">
       <n-button class="btn btn-ghost" :disabled="isCreating" @click="router.push('/')">{{ t('createProject.cancel') }}</n-button>
-      <n-button class="btn btn-primary" :loading="isCreating" :disabled="!canCreate" @click="handleCreate">{{ t('createProject.importAndEnterStoryboard') }} →</n-button>
+      <n-button class="btn btn-primary" :loading="isCreating" :disabled="!canCreate" @click="handleCreate">{{ t('createProject.importAndEnterWorkbench') }} →</n-button>
     </footer>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { NButton, NInput, NInputNumber, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
+import { listVideoPacks } from '@/entities/config/api'
+import type { VideoPackDto } from '@/entities/config/types'
 import { useProjectStore } from '@/entities/project/store'
 import type { CreateProjectRequest } from '@/entities/project/types'
 import { useDictOptions } from '@/shared/dict/useDictOptions'
@@ -135,6 +160,7 @@ interface CreateProjectForm {
   segmentDurationSeconds: number
   stylePrompt: string
   sourceText: string
+  activePackId?: string
 }
 
 interface CreateModeOption {
@@ -150,6 +176,8 @@ const { t } = useI18n()
 
 const selectedMode = ref<CreateMode>('text')
 const isCreating = ref(false)
+const isLoadingPacks = ref(false)
+const videoPacks = ref<VideoPackDto[]>([])
 const durationOptions = [4, 6, 8] as const
 const textInputTypes: readonly InputType[] = ['topic', 'paste', 'article']
 
@@ -165,6 +193,7 @@ const form = reactive<CreateProjectForm>({
   segmentDurationSeconds: 4,
   stylePrompt: '',
   sourceText: '',
+  activePackId: undefined,
 })
 
 const createModes = computed<CreateModeOption[]>(() => [
@@ -174,6 +203,7 @@ const createModes = computed<CreateModeOption[]>(() => [
 ])
 
 const textEntries = computed(() => inputOptions.value.filter((option) => textInputTypes.includes(option.value)))
+const selectablePacks = computed(() => videoPacks.value.filter((pack) => pack.isEnabled && pack.applicableInputTypes.includes(form.inputType)))
 const mainlineSteps = computed(() => [t('storyboard.steps.storyboard'), t('storyboard.steps.image'), t('storyboard.steps.video'), t('storyboard.steps.composition')])
 const sourceText = computed(() => form.sourceText.trim())
 const sourceTextLength = computed(() => sourceText.value.length)
@@ -187,6 +217,8 @@ const inputLabel = computed(() => {
 })
 
 const inputPlaceholder = computed(() => (form.inputType === 'topic' ? t('createProject.inputPlaceholderTopic') : t('createProject.inputPlaceholderContent')))
+
+onMounted(loadVideoPacks)
 
 function modePillClass(selected: boolean, disabled: boolean) {
   if (disabled) return 'cursor-not-allowed text-muted opacity-50'
@@ -208,10 +240,37 @@ function selectMode(mode: CreateModeOption) {
 
 function selectEntry(inputType: InputType) {
   form.inputType = inputType
+  if (form.activePackId && !selectablePacks.value.some((pack) => pack.packId === form.activePackId)) {
+    form.activePackId = undefined
+  }
 }
 
 function setTargetSceneCount(value: number | null) {
   form.targetSceneCount = Math.min(60, Math.max(1, Math.round(value ?? 8)))
+}
+
+async function loadVideoPacks() {
+  isLoadingPacks.value = true
+  try {
+    videoPacks.value = await listVideoPacks({ includeDisabled: false })
+    if (!form.activePackId && selectablePacks.value[0]) {
+      selectVideoPack(selectablePacks.value[0])
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : String(error))
+  } finally {
+    isLoadingPacks.value = false
+  }
+}
+
+function selectVideoPack(pack: VideoPackDto) {
+  form.activePackId = pack.packId
+  form.aspectRatio = pack.defaultAspectRatio as AspectRatio
+  form.targetSceneCount = pack.defaultSceneCount
+  form.segmentDurationSeconds = Math.max(1, Math.round(pack.defaultDurationSeconds / Math.max(1, pack.defaultSceneCount)))
+  if (!form.stylePrompt.trim() && pack.defaultTone) {
+    form.stylePrompt = pack.defaultTone
+  }
 }
 
 function toCreateProjectRequest(): CreateProjectRequest {
@@ -226,6 +285,7 @@ function toCreateProjectRequest(): CreateProjectRequest {
     targetSceneCount: form.targetSceneCount,
     segmentDurationSeconds: form.segmentDurationSeconds,
     stylePrompt: form.stylePrompt.trim() || undefined,
+    activePackId: form.activePackId,
     inputProcessMode: inputProcessMode.value,
     inputOptions: form.inputType === 'paste' ? { splitMode: 'paragraph' } : undefined,
   }
@@ -241,7 +301,7 @@ async function handleCreate() {
 
   try {
     const detail = await projectStore.createDraftProject(toCreateProjectRequest())
-    await router.push(`/projects/${detail.project.projectId}/workspace/storyboard`)
+    await router.push(`/projects/${detail.project.projectId}`)
   } catch (error) {
     message.error(error instanceof Error && error.message ? error.message : t('createProject.validation.createFailed'))
   } finally {

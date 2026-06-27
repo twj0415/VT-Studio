@@ -7,6 +7,8 @@
 
 配音 TTS 模块负责把分镜文案转成音频文件，并读取真实音频时长。
 
+这里的“独白 / 旁白”优先指 `StoryboardItem.narrationText`。TTS 不负责重新写文案，只负责把已经确认的独白 / 旁白转成音频。
+
 它要做，但不是当前 `image_to_video` 主线的前置条件。
 
 当前主线可以先走：
@@ -28,6 +30,8 @@ StoryboardItem.audioPath
 StoryboardItem.audioDurationSeconds
 StoryboardItem.durationSeconds（启用音频驱动时可回填）
 ```
+
+如果没有启用 TTS，分镜和视频仍可使用估算 `durationSeconds` 继续生图、图生视频和合成。只有用户明确选择“必须带配音导出”时，TTS 失败才应阻断对应导出。
 
 ---
 
@@ -97,7 +101,7 @@ StoryboardItem.durationSeconds（启用音频驱动时可回填）
 
 ### 坑提醒
 
-- Toonflow 的 TTS 是空壳，不能抄。它的 `AiAudio.run` 静默吞错，供应商 TTS 多数未真正实现。
+- Toonflow 的 TTS 是空壳，不能采用。它的 `AiAudio.run` 静默吞错，供应商 TTS 多数未真正实现。
 - TTS 失败不能静默跳过；但未启用 TTS 时，也不能阻塞 image_to_video 主线。
 
 ---

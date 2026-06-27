@@ -10,6 +10,7 @@
     "frontendDist": "../src/dist"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "VT AI Short Video Maker",
@@ -20,6 +21,23 @@
     ]
   },
   "bundle": {
-    "active": false
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "resources": [
+      "../resources/bin/**/*",
+      "../resources/licenses/**/*"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "English",
+          "SimpChinese"
+        ],
+        "displayLanguageSelector": true
+      }
+    }
   }
 }

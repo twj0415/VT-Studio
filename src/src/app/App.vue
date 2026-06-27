@@ -11,10 +11,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, watchEffect } from 'vue'
+import { computed, onMounted, onUnmounted, watchEffect } from 'vue'
 import { NConfigProvider, NDialogProvider, NMessageProvider } from 'naive-ui'
 
 import { useConfigStore } from '@/entities/config/store'
+import { useTaskStore } from '@/entities/task/store'
 import AppShell from '@/widgets/app-shell/AppShell.vue'
 import { i18n } from '@/shared/i18n'
 import { useAppStore } from '@/shared/stores/appStore'
@@ -23,6 +24,7 @@ import { applyThemeVars } from '@/shared/theme/cssVars'
 
 const appStore = useAppStore()
 const configStore = useConfigStore()
+const taskStore = useTaskStore()
 const currentTheme = computed(() => themeMap[appStore.themePreset])
 const themeOverrides = computed(() => currentTheme.value.naiveThemeOverrides)
 
@@ -31,6 +33,11 @@ onMounted(async () => {
   appStore.setThemePreset(config.themePreset)
   appStore.setAppLocale(config.appLocale)
   appStore.setLayoutDensity(config.layoutDensity)
+  await taskStore.subscribeTaskProgress()
+})
+
+onUnmounted(() => {
+  taskStore.stopTaskProgress()
 })
 
 watchEffect(() => {

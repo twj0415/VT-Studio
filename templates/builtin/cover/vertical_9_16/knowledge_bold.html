@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root { color-scheme: dark; --accent: #FFD54A; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background: #111827;
+        color: #fff;
+        font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+      }
+      .cover {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        padding: 132px 92px;
+        display: flex;
+        align-items: flex-end;
+        background:
+          linear-gradient(180deg, rgba(17,24,39,.25), rgba(17,24,39,.92)),
+          radial-gradient(circle at 72% 18%, rgba(255,213,74,.24), transparent 32%),
+          #111827;
+      }
+      .image {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: .72;
+      }
+      .content { position: relative; z-index: 1; max-width: 860px; }
+      .rule { width: 132px; height: 12px; margin-bottom: 36px; background: var(--accent); }
+      .title { margin: 0; font-size: 112px; line-height: 1.08; font-weight: 900; letter-spacing: 0; }
+      .narration { margin-top: 34px; max-width: 780px; font-size: 38px; line-height: 1.45; color: rgba(255,255,255,.82); }
+    </style>
+  </head>
+  <body data-template="cover" data-position="{{position:select=bottom}}" data-accent="{{accent_color:color=#FFD54A}}">
+    <main class="cover">
+      <img id="image" class="image" alt="" hidden />
+      <section class="content">
+        <div class="rule"></div>
+        <h1 id="title" class="title">{{cover_title:text}}</h1>
+        <div id="narration" class="narration"></div>
+      </section>
+    </main>
+    <script>
+      function applyTemplateData() {
+        const payload = window.__VT_TEMPLATE_PAYLOAD__ || { data: {}, params: {} };
+        const params = payload.params || {};
+        const data = payload.data || {};
+        document.documentElement.style.setProperty('--accent', String(params.accent_color || '#FFD54A'));
+        document.getElementById('title').textContent = String(params.cover_title || data.title || '未命名封面');
+        document.getElementById('narration').textContent = String(data.narration || '');
+        const image = document.getElementById('image');
+        if (data.image_path) {
+          image.src = '../../../../../' + String(data.image_path);
+          image.hidden = false;
+        }
+      }
+      document.addEventListener('vt-template-data', applyTemplateData);
+      applyTemplateData();
+    </script>
+  </body>
+</html>

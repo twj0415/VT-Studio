@@ -4,7 +4,7 @@ import { tauriCommands } from '@/shared/api/commands'
 import { getApiAdapter } from '@/shared/api/invoke'
 import { createMockId } from '@/shared/mock/ids'
 
-import type { CreateProjectRequest, ListProjectsRequest, ProjectDetailDto, ProjectDto, ProjectSummaryDto } from './types'
+import type { CreateProjectRequest, GenerateProjectCoverRequest, ListProjectsRequest, ProjectDetailDto, ProjectDto, ProjectSummaryDto, ReplaceProjectCoverImageRequest } from './types'
 
 const INLINE_SOURCE_TEXT_LIMIT_BYTES = 20 * 1024
 const LONG_SOURCE_TEXT_PATH = 'input/source.txt'
@@ -23,13 +23,16 @@ const projects: ProjectSummaryDto[] = [
     targetSceneCount: 8,
     segmentDurationSeconds: 4,
     stylePrompt: '干净、真实、柔和自然光',
+    activePackId: 'pack_knowledge_short',
+    ruleRefs: {},
+    executableRefs: {},
     contentLanguage: 'zh-CN',
     lifecycle: 'draft',
     createdAt: MOCK_NOW,
     updatedAt: MOCK_NOW,
     latestTask: {
       taskId: 'task_draft',
-      taskStatus: 'waiting_user',
+      taskStatus: 'running',
       summary: '等待确认分镜',
     },
   },
@@ -72,13 +75,16 @@ export async function createProject(request: CreateProjectRequest): Promise<Proj
     targetSceneCount: request.targetSceneCount,
     segmentDurationSeconds: request.segmentDurationSeconds,
     stylePrompt: request.stylePrompt,
+    activePackId: request.activePackId,
+    ruleRefs: request.ruleRefs ?? {},
+    executableRefs: request.executableRefs ?? {},
     contentLanguage: request.contentLanguage,
     lifecycle: 'draft',
     createdAt: MOCK_NOW,
     updatedAt: MOCK_NOW,
     latestTask: {
       taskId: createMockId('task'),
-      taskStatus: 'waiting_user',
+      taskStatus: 'running',
       summary: '等待确认分镜',
     },
   }
@@ -96,6 +102,35 @@ export async function getProjectDetail(projectId: string): Promise<ProjectDetail
   return toProjectDetail(project)
 }
 
+export async function generateProjectCover(request: GenerateProjectCoverRequest): Promise<ProjectDetailDto> {
+  if (getApiAdapter() === 'tauri') {
+    return callCommand<ProjectDetailDto, { request: GenerateProjectCoverRequest }>(tauriCommands.generateProjectCover, { request })
+  }
+
+  const project = projects.find((item) => item.projectId === request.projectId)
+  if (!project) throw new Error(`Project not found: ${request.projectId}`)
+  const coverTitle = normalizeCoverTitle(request.coverTitle || project.title)
+  project.coverPath = `projects/${request.projectId}/cover/cover.png`
+  project.coverTitle = coverTitle
+  project.coverTemplateId = request.coverTemplateId || project.coverTemplateId || 'knowledge_bold'
+  project.coverSourceItemId = request.coverSourceItemId || null
+  project.updatedAt = MOCK_NOW
+  return toProjectDetail(project)
+}
+
+export async function replaceProjectCoverImage(request: ReplaceProjectCoverImageRequest): Promise<ProjectDetailDto> {
+  if (getApiAdapter() === 'tauri') {
+    return callCommand<ProjectDetailDto, { request: ReplaceProjectCoverImageRequest }>(tauriCommands.replaceProjectCoverImage, { request })
+  }
+
+  return generateProjectCover({
+    projectId: request.projectId,
+    coverTitle: request.coverTitle,
+    coverTemplateId: request.coverTemplateId,
+    sourceImagePath: `projects/${request.projectId}/cover/source.png`,
+  })
+}
+
 function toProjectDetail(project: ProjectSummaryDto): ProjectDetailDto {
   return {
     project,
@@ -103,10 +138,15 @@ function toProjectDetail(project: ProjectSummaryDto): ProjectDetailDto {
       projectId: project.projectId,
       summary: '第一阶段默认作品设定集',
     },
-    styleBible: { styleId: 'style_default', name: '默认画风' },
+    styleBible: { id: 'style_default', styleId: 'style_default', name: '默认画风' },
     characterBibles: [],
     locationBibles: [],
   }
+}
+
+function normalizeCoverTitle(value: string) {
+  const title = value.trim() || '未命名封面'
+  return [...title].slice(0, 15).join('')
 }
 
 function defaultTitle(request: CreateProjectRequest) {

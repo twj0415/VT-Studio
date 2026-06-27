@@ -20,6 +20,10 @@ const DICTIONARY_CODES: &[&str] = &[
     "providerStatus",
     "providerAuthType",
     "modelCapability",
+    "templateType",
+    "templatePosition",
+    "transitionType",
+    "fontWeight",
     "fileBucket",
     "fileAccessPolicy",
     "errorKind",
@@ -73,12 +77,9 @@ pub fn get_dictionary(code: String) -> Result<DictionaryDto, String> {
         "taskStatus" => vec![
             colored_item("待处理", "pending", "status.pending"),
             colored_item("运行中", "running", "status.running"),
-            colored_item("重试中", "retrying", "status.retrying"),
-            colored_item("等待确认", "waiting_user", "status.waiting_user"),
             colored_item("已完成", "succeeded", "status.succeeded"),
             colored_item("失败", "failed", "status.failed"),
             colored_item("已取消", "cancelled", "status.cancelled"),
-            colored_item("已跳过", "skipped", "status.skipped"),
         ],
         "taskStepKind" => vec![
             item("项目初始化", "project_init"),
@@ -147,6 +148,28 @@ pub fn get_dictionary(code: String) -> Result<DictionaryDto, String> {
             item("文本转语音", "text_to_speech"),
             item("视觉分析", "vision_analysis"),
             item("Workflow 执行", "workflow_execution"),
+        ],
+        "templateType" => vec![
+            item("画面帧", "frame"),
+            item("封面", "cover"),
+            item("字幕", "subtitle"),
+            item("转场", "transition"),
+            item("布局", "layout"),
+        ],
+        "templatePosition" => vec![
+            item("顶部", "top"),
+            item("居中", "center"),
+            item("底部", "bottom"),
+        ],
+        "transitionType" => vec![
+            item("淡入淡出", "fade"),
+            item("轻微推近", "zoom_in"),
+            item("平移", "pan"),
+        ],
+        "fontWeight" => vec![
+            item("常规", "regular"),
+            item("中等", "medium"),
+            item("加粗", "bold"),
         ],
         "fileBucket" => vec![
             item("项目", "project"),

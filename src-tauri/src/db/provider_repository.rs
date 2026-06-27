@@ -1,4 +1,5 @@
 use crate::db::{Database, Repository};
+use crate::security::secret_guard::reject_json_secrets;
 use rusqlite::{params, Row};
 use serde_json::{json, Value};
 
@@ -54,6 +55,7 @@ impl<'db> ProviderRepository<'db> {
     }
 
     pub fn upsert_provider(&self, provider: &ProviderRecord) -> Result<(), String> {
+        reject_json_secrets(&provider.config_json)?;
         let config_json =
             serde_json::to_string(&provider.config_json).map_err(|error| error.to_string())?;
         self.database
@@ -112,7 +114,20 @@ impl<'db> ProviderRepository<'db> {
             .map_err(|error| error.to_string())
     }
 
+    pub fn delete_provider(&self, provider_id: &str) -> Result<(), String> {
+        self.database
+            .with_connection(|connection| {
+                connection.execute(
+                    "DELETE FROM providers WHERE provider_id = ?1",
+                    [provider_id],
+                )?;
+                Ok(())
+            })
+            .map_err(|error| error.to_string())
+    }
+
     pub fn upsert_provider_model(&self, model: &ProviderModelRecord) -> Result<(), String> {
+        reject_json_secrets(&model.config_json)?;
         let config_json =
             serde_json::to_string(&model.config_json).map_err(|error| error.to_string())?;
         self.database
@@ -144,6 +159,41 @@ impl<'db> ProviderRepository<'db> {
                     ],
                 )?;
                 Ok(())
+            })
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn delete_provider_model(&self, model_id: &str) -> Result<(), String> {
+        self.database
+            .with_connection(|connection| {
+                connection.execute(
+                    "DELETE FROM provider_models WHERE model_id = ?1",
+                    [model_id],
+                )?;
+                Ok(())
+            })
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn get_provider_model(
+        &self,
+        model_id: &str,
+    ) -> Result<Option<ProviderModelRecord>, String> {
+        self.database
+            .with_connection(|connection| {
+                let mut statement = connection.prepare(
+                    r#"
+                    SELECT model_id, provider_id, provider_model_id, display_name,
+                           capability, config_json, enabled
+                    FROM provider_models
+                    WHERE model_id = ?1
+                    "#,
+                )?;
+                match statement.query_row([model_id], provider_model_from_row) {
+                    Ok(model) => Ok(Some(model)),
+                    Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+                    Err(error) => Err(error),
+                }
             })
             .map_err(|error| error.to_string())
     }
@@ -183,6 +233,7 @@ impl<'db> ProviderRepository<'db> {
     }
 
     pub fn upsert_workflow_preset(&self, preset: &WorkflowPresetRecord) -> Result<(), String> {
+        reject_json_secrets(&preset.config_json)?;
         let config_json =
             serde_json::to_string(&preset.config_json).map_err(|error| error.to_string())?;
         self.database
@@ -220,6 +271,41 @@ impl<'db> ProviderRepository<'db> {
             .map_err(|error| error.to_string())
     }
 
+    pub fn delete_workflow_preset(&self, preset_id: &str) -> Result<(), String> {
+        self.database
+            .with_connection(|connection| {
+                connection.execute(
+                    "DELETE FROM workflow_presets WHERE preset_id = ?1",
+                    [preset_id],
+                )?;
+                Ok(())
+            })
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn get_workflow_preset(
+        &self,
+        preset_id: &str,
+    ) -> Result<Option<WorkflowPresetRecord>, String> {
+        self.database
+            .with_connection(|connection| {
+                let mut statement = connection.prepare(
+                    r#"
+                    SELECT preset_id, provider_id, model_id, name, kind, capability,
+                           config_json, enabled
+                    FROM workflow_presets
+                    WHERE preset_id = ?1
+                    "#,
+                )?;
+                match statement.query_row([preset_id], workflow_preset_from_row) {
+                    Ok(preset) => Ok(Some(preset)),
+                    Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+                    Err(error) => Err(error),
+                }
+            })
+            .map_err(|error| error.to_string())
+    }
+
     pub fn list_workflow_presets(
         &self,
         capability: Option<&str>,
@@ -237,6 +323,40 @@ impl<'db> ProviderRepository<'db> {
                         "#,
                     )?;
                     let rows = statement.query_map([capability], workflow_preset_from_row)?;
+                    return rows.collect();
+                }
+
+                let mut statement = connection.prepare(
+                    r#"
+                    SELECT preset_id, provider_id, model_id, name, kind, capability,
+                           config_json, enabled
+                    FROM workflow_presets
+                    ORDER BY created_at ASC
+                    "#,
+                )?;
+                let rows = statement.query_map([], workflow_preset_from_row)?;
+                rows.collect()
+            })
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn list_workflow_presets_by_provider(
+        &self,
+        provider_id: Option<&str>,
+    ) -> Result<Vec<WorkflowPresetRecord>, String> {
+        self.database
+            .with_connection(|connection| {
+                if let Some(provider_id) = provider_id {
+                    let mut statement = connection.prepare(
+                        r#"
+                        SELECT preset_id, provider_id, model_id, name, kind, capability,
+                               config_json, enabled
+                        FROM workflow_presets
+                        WHERE provider_id = ?1
+                        ORDER BY created_at ASC
+                        "#,
+                    )?;
+                    let rows = statement.query_map([provider_id], workflow_preset_from_row)?;
                     return rows.collect();
                 }
 

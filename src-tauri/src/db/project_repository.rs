@@ -3,6 +3,11 @@ use crate::domain::project::{
     CreateProjectRequest, ListProjectsRequest, NamedProjectAssetDto, PageResult, ProjectBibleDto,
     ProjectDetailDto, ProjectDto, ProjectLatestTaskDto, ProjectSummaryDto,
 };
+use crate::domain::task::{
+    initial_step_status, DIGITAL_HUMAN_PIPELINE_STEPS, DIGITAL_HUMAN_TASK_KIND,
+    IMAGE_SLIDESHOW_PIPELINE_STEPS, IMAGE_SLIDESHOW_TASK_KIND, IMAGE_TO_VIDEO_PIPELINE_STEPS,
+    IMAGE_TO_VIDEO_TASK_KIND, MATERIAL_EDIT_PIPELINE_STEPS, MATERIAL_EDIT_TASK_KIND,
+};
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde_json::{json, Value};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -26,6 +31,11 @@ impl<'db> ProjectRepository<'db> {
         request: CreateProjectRequest,
     ) -> Result<ProjectDetailDto, String> {
         let task_id = create_id("task");
+        let (active_pack_id, rule_refs, executable_refs) = resolve_project_config_refs(&request);
+        let rule_refs_json =
+            serde_json::to_string(&rule_refs).map_err(|error| error.to_string())?;
+        let executable_refs_json =
+            serde_json::to_string(&executable_refs).map_err(|error| error.to_string())?;
         let input_process_mode = if request.input_type == "paste" {
             "fixed".to_string()
         } else {
@@ -34,6 +44,17 @@ impl<'db> ProjectRepository<'db> {
         let input_options = request.input_options.unwrap_or_else(|| json!({}));
         let input_options_json =
             serde_json::to_string(&input_options).map_err(|error| error.to_string())?;
+        let style_data_json = serde_json::to_string(&json!({
+            "style_prompt": request.style_prompt.clone().unwrap_or_default(),
+            "color_palette": [],
+            "lighting": "",
+            "composition": "",
+            "negative_prompt": "",
+            "reference_image_path": null,
+            "reference_images_json": [],
+            "reference_images": []
+        }))
+        .map_err(|error| error.to_string())?;
         let (source_text, source_text_path) = resolve_source_text_fields(
             request.topic.clone(),
             request.source_text,
@@ -44,6 +65,9 @@ impl<'db> ProjectRepository<'db> {
         } else {
             request.title
         };
+        let workflow_type = request.workflow_type.clone();
+        let (task_kind, current_step, summary, pipeline_steps) =
+            project_workflow_task_plan(&workflow_type);
 
         self.database
             .transaction(|transaction| {
@@ -53,14 +77,15 @@ impl<'db> ProjectRepository<'db> {
                         project_id, title, workflow_type, input_type, input_process_mode,
                         input_options_json, source_text, source_text_path, aspect_ratio,
                         target_scene_count, segment_duration_seconds, style_prompt, tone,
-                        content_language, lifecycle
+                        content_language, active_pack_id, rule_refs_json,
+                        executable_refs_json, lifecycle
                     )
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, 'draft')
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, 'draft')
                     "#,
                     params![
                         project_id,
                         title,
-                        request.workflow_type,
+                        workflow_type,
                         request.input_type,
                         input_process_mode,
                         input_options_json,
@@ -72,6 +97,9 @@ impl<'db> ProjectRepository<'db> {
                         request.style_prompt,
                         request.tone,
                         request.content_language,
+                        active_pack_id,
+                        rule_refs_json,
+                        executable_refs_json,
                     ],
                 )?;
 
@@ -82,11 +110,45 @@ impl<'db> ProjectRepository<'db> {
 
                 transaction.execute(
                     r#"
-                    INSERT INTO tasks (task_id, project_id, task_kind, task_status, current_step, summary)
-                    VALUES (?1, ?2, 'image_to_video', 'waiting_user', 'storyboard_review', ?3)
+                    INSERT INTO style_bibles (style_bible_id, project_id, name, data_json)
+                    VALUES (?1, ?2, ?3, ?4)
                     "#,
-                    params![task_id, project_id, "等待确认分镜"],
+                    params![
+                        format!("style_{project_id}"),
+                        project_id,
+                        "默认画风",
+                        style_data_json,
+                    ],
                 )?;
+
+                transaction.execute(
+                    r#"
+                    INSERT INTO tasks (task_id, project_id, task_kind, task_status, current_step, summary)
+                    VALUES (?1, ?2, ?3, 'running', ?4, ?5)
+                    "#,
+                    params![task_id, project_id, task_kind, current_step, summary],
+                )?;
+
+                for (order_index, step_name) in pipeline_steps.iter().enumerate() {
+                    transaction.execute(
+                        r#"
+                        INSERT INTO task_steps (step_id, task_id, step_name, status, output_json, order_index)
+                        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                        "#,
+                        params![
+                            format!("{task_id}_{step_name}"),
+                            task_id,
+                            step_name,
+                            initial_step_status(step_name),
+                            if *step_name == "project_init" {
+                                Some(json!({ "orderIndex": order_index, "source": "project_create" }).to_string())
+                            } else {
+                                None
+                            },
+                            order_index as i64,
+                        ],
+                    )?;
+                }
 
                 Ok(())
             })
@@ -150,6 +212,69 @@ impl<'db> ProjectRepository<'db> {
             .with_connection(|connection| read_project_detail(connection, project_id))
             .map_err(|error| error.to_string())
     }
+
+    pub fn update_cover(
+        &self,
+        project_id: &str,
+        cover_path: &str,
+        cover_title: &str,
+        cover_template_id: &str,
+        cover_source_item_id: Option<&str>,
+    ) -> Result<ProjectDetailDto, String> {
+        self.database
+            .with_connection(|connection| {
+                connection.execute(
+                    r#"
+                    UPDATE projects
+                    SET
+                        cover_path = ?1,
+                        cover_title = ?2,
+                        cover_template_id = ?3,
+                        cover_source_item_id = ?4,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE project_id = ?5
+                    "#,
+                    params![
+                        cover_path,
+                        cover_title,
+                        cover_template_id,
+                        cover_source_item_id,
+                        project_id
+                    ],
+                )?;
+                Ok(())
+            })
+            .map_err(|error| error.to_string())?;
+
+        self.get_detail(project_id)?
+            .ok_or_else(|| format!("Project not found: {project_id}"))
+    }
+
+    pub fn update_source_text_path(
+        &self,
+        project_id: &str,
+        source_text_path: &str,
+    ) -> Result<ProjectDetailDto, String> {
+        self.database
+            .with_connection(|connection| {
+                connection.execute(
+                    r#"
+                    UPDATE projects
+                    SET
+                        source_text = NULL,
+                        source_text_path = ?1,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE project_id = ?2
+                    "#,
+                    params![source_text_path, project_id],
+                )?;
+                Ok(())
+            })
+            .map_err(|error| error.to_string())?;
+
+        self.get_detail(project_id)?
+            .ok_or_else(|| format!("Project not found: {project_id}"))
+    }
 }
 
 impl Repository for ProjectRepository<'_> {
@@ -165,7 +290,9 @@ fn read_all_projects(connection: &Connection) -> Result<Vec<ProjectDto>, rusqlit
             project_id, title, workflow_type, input_type, input_process_mode,
             input_options_json, source_text, source_text_path, aspect_ratio,
             target_scene_count, segment_duration_seconds, style_prompt, tone,
-            content_language, lifecycle, created_at, updated_at
+            content_language, active_pack_id, rule_refs_json, executable_refs_json,
+            cover_path, cover_title, cover_template_id, cover_source_item_id,
+            lifecycle, created_at, updated_at
         FROM projects
         "#,
     )?;
@@ -219,7 +346,9 @@ fn read_project(
                 project_id, title, workflow_type, input_type, input_process_mode,
                 input_options_json, source_text, source_text_path, aspect_ratio,
                 target_scene_count, segment_duration_seconds, style_prompt, tone,
-                content_language, lifecycle, created_at, updated_at
+                content_language, active_pack_id, rule_refs_json, executable_refs_json,
+                cover_path, cover_title, cover_template_id, cover_source_item_id,
+                lifecycle, created_at, updated_at
             FROM projects
             WHERE project_id = ?1
             "#,
@@ -299,8 +428,24 @@ fn read_named_assets(
     );
     let mut statement = connection.prepare(&sql)?;
     let rows = statement.query_map([project_id], |row| {
+        let id: String = row.get(0)?;
         Ok(NamedProjectAssetDto {
-            id: row.get(0)?,
+            style_id: if table == "style_bibles" {
+                Some(id.clone())
+            } else {
+                None
+            },
+            character_id: if table == "character_bibles" {
+                Some(id.clone())
+            } else {
+                None
+            },
+            location_id: if table == "location_bibles" {
+                Some(id.clone())
+            } else {
+                None
+            },
+            id,
             name: row.get(1)?,
         })
     })?;
@@ -315,6 +460,11 @@ fn row_to_project(
     let input_options_json: String = row.get(5)?;
     let input_options =
         serde_json::from_str::<Value>(&input_options_json).unwrap_or_else(|_| json!({}));
+    let rule_refs_json: String = row.get(15)?;
+    let executable_refs_json: String = row.get(16)?;
+    let rule_refs = serde_json::from_str::<Value>(&rule_refs_json).unwrap_or_else(|_| json!({}));
+    let executable_refs =
+        serde_json::from_str::<Value>(&executable_refs_json).unwrap_or_else(|_| json!({}));
 
     Ok(ProjectDto {
         project_id: row.get(0)?,
@@ -329,13 +479,74 @@ fn row_to_project(
         target_scene_count: row.get(9)?,
         segment_duration_seconds: row.get(10)?,
         style_prompt: row.get(11)?,
+        active_pack_id: row.get(14)?,
+        rule_refs,
+        executable_refs,
+        cover_path: row.get(17)?,
+        cover_title: row.get(18)?,
+        cover_template_id: row.get(19)?,
+        cover_source_item_id: row.get(20)?,
         tone: row.get(12)?,
         content_language: row.get(13)?,
-        lifecycle: row.get(14)?,
-        created_at: row.get(15)?,
-        updated_at: row.get(16)?,
+        lifecycle: row.get(21)?,
+        created_at: row.get(22)?,
+        updated_at: row.get(23)?,
         latest_task,
     })
+}
+
+fn resolve_project_config_refs(request: &CreateProjectRequest) -> (Option<String>, Value, Value) {
+    (
+        request
+            .active_pack_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string),
+        request.rule_refs.clone().unwrap_or_else(|| json!({})),
+        request.executable_refs.clone().unwrap_or_else(|| json!({})),
+    )
+}
+
+fn project_workflow_task_plan(
+    workflow_type: &str,
+) -> (
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static [&'static str],
+) {
+    if workflow_type == DIGITAL_HUMAN_TASK_KIND {
+        return (
+            DIGITAL_HUMAN_TASK_KIND,
+            "script_review",
+            "等待确认口播文案",
+            DIGITAL_HUMAN_PIPELINE_STEPS,
+        );
+    }
+    if workflow_type == MATERIAL_EDIT_TASK_KIND {
+        return (
+            MATERIAL_EDIT_TASK_KIND,
+            "material_import",
+            "等待导入素材",
+            MATERIAL_EDIT_PIPELINE_STEPS,
+        );
+    }
+    if workflow_type == IMAGE_SLIDESHOW_TASK_KIND {
+        return (
+            IMAGE_SLIDESHOW_TASK_KIND,
+            "storyboard_review",
+            "等待确认分镜",
+            IMAGE_SLIDESHOW_PIPELINE_STEPS,
+        );
+    }
+
+    (
+        IMAGE_TO_VIDEO_TASK_KIND,
+        "storyboard_review",
+        "等待确认分镜",
+        IMAGE_TO_VIDEO_PIPELINE_STEPS,
+    )
 }
 
 fn resolve_source_text_fields(

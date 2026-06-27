@@ -4,3 +4,4 @@
 //! Secrets must stay out of DTOs, logs, config files, and export packages.
 
 pub mod path_guard;
+pub mod secret_guard;

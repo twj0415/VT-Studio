@@ -1,23 +1,13 @@
 <template>
   <section class="view h-full min-w-0 overflow-hidden bg-page text-primary">
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
-      <header class="flex h-12 flex-none items-center border-b border-border bg-panel px-vt-3">
-        <div class="flex w-[320px] flex-none items-center gap-vt-3">
-          <button type="button" class="grid size-8 flex-none place-items-center rounded-vt-sm border border-border text-sm text-muted transition hover:border-border-strong hover:bg-card hover:text-primary" @click="router.push('/')">←</button>
-          <div class="flex min-w-0 items-center gap-vt-2">
-            <div class="min-w-0 truncate text-base font-semibold">{{ projectTitle }}</div>
-            <span v-if="isMockStoryboard" class="flex-none rounded-vt-sm border border-accent-line bg-accent-soft px-vt-2 py-0.5 text-[11px] font-medium text-accent">{{ t('storyboard.mockBadge') }}</span>
-          </div>
-        </div>
-        <div class="flex min-w-0 flex-1 items-center justify-center">
-          <WorkspaceStepBar class="hidden min-w-0 justify-center lg:flex" compact :project-id="projectId" current-step="storyboard" :access="workspaceAccess" @blocked="handleBlockedStep" />
-        </div>
-        <div class="flex w-[360px] flex-none items-center justify-end gap-vt-2">
+      <WorkspaceHeader :project-id="projectId" :project-title="projectTitle" current-step="storyboard" :access="workspaceAccess" back-to="/" :badge-label="isMockStoryboard ? t('storyboard.mockBadge') : ''" right-width-class="w-[380px]" :usage="resourceUsage" @blocked="handleBlockedStep">
+        <template #actions>
           <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm border border-border-strong px-vt-3 text-sm font-medium text-secondary transition hover:bg-card hover:text-primary disabled:cursor-not-allowed disabled:opacity-50" @click="handleSaveAll" :disabled="dirtyItemIds.size === 0 || isSavingAll">{{ t('storyboard.saveAll') }}</button>
           <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm border border-border-strong px-vt-3 text-sm font-medium text-secondary transition hover:bg-card hover:text-primary disabled:cursor-not-allowed disabled:opacity-50" @click="handleApprove" :disabled="isSavingAll">{{ t('storyboard.approveStoryboard') }}</button>
           <button type="button" class="inline-flex h-9 items-center justify-center rounded-vt-sm bg-accent px-vt-4 text-sm font-semibold text-accent-ink transition hover:brightness-110" @click="handleEnterImage">{{ t('storyboard.enterImage') }}</button>
-        </div>
-      </header>
+        </template>
+      </WorkspaceHeader>
 
       <main class="flex min-h-0 flex-1 flex-col overflow-hidden bg-page">
         <section class="flex min-h-0 flex-1 flex-col gap-vt-3 overflow-hidden p-vt-3">
@@ -43,6 +33,7 @@
             </label>
 
             <div class="ml-auto flex flex-wrap items-center gap-vt-2">
+              <WorkspaceRowJump :count="storyboardItems.length" @jump="jumpToRow" />
               <span v-if="dirtyItemIds.size > 0" class="text-xs text-accent">{{ t('storyboard.dirtyCount', { count: dirtyItemIds.size }) }}</span>
               <button type="button" class="inline-flex h-8 items-center justify-center rounded-vt-sm border border-border-strong px-vt-3 text-xs font-medium text-secondary transition hover:bg-page hover:text-primary disabled:cursor-not-allowed disabled:opacity-50" :disabled="isRegenerating" @click="handleRegenerate">{{ t('storyboard.regenerateStoryboard') }}</button>
               <button type="button" class="inline-flex h-8 items-center justify-center rounded-vt-sm border border-border-strong px-vt-3 text-xs font-medium text-secondary transition hover:bg-page hover:text-primary disabled:cursor-not-allowed disabled:opacity-50" :disabled="isRestoring" @click="handleRestore">{{ t('storyboard.restorePrevious') }}</button>
@@ -59,29 +50,50 @@
           </div>
 
           <div class="min-h-0 flex-1 overflow-auto rounded-vt-md border border-border bg-card">
-            <table class="w-full min-w-[1040px] table-fixed border-separate border-spacing-0 text-left text-sm">
+            <table class="w-full min-w-[1260px] table-fixed border-separate border-spacing-0 text-left text-sm">
               <thead class="sticky top-0 z-10 bg-panel text-xs text-muted">
                 <tr>
                   <th class="w-[56px] border-b border-border px-vt-2 py-vt-2 font-medium">{{ t('storyboard.columns.index') }}</th>
                   <th class="w-[320px] border-b border-border px-vt-2 py-vt-2 font-medium">{{ t('storyboard.columns.source') }}</th>
                   <th class="w-[320px] border-b border-border px-vt-2 py-vt-2 font-medium">{{ t('storyboard.columns.narration') }}</th>
                   <th class="w-[260px] border-b border-border px-vt-2 py-vt-2 font-medium">{{ t('storyboard.columns.intent') }}</th>
+                  <th class="w-[240px] border-b border-border px-vt-2 py-vt-2 font-medium">{{ t('storyboard.columns.characters') }}</th>
+                  <th class="w-[220px] border-b border-border px-vt-2 py-vt-2 font-medium">{{ t('storyboard.columns.scene') }}</th>
                   <th class="w-[190px] border-b border-border px-vt-2 py-vt-2 font-medium">{{ t('storyboard.columns.actions') }}</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="item in storyboardItems" :key="item.itemId" class="h-[112px] align-top transition hover:bg-card-hover/70" :class="[dirtyItemIds.has(item.itemId) ? 'bg-accent-soft/50' : '', isMergeSource(item) ? 'bg-accent-soft ring-1 ring-inset ring-accent-line' : '', canMergeWithPending(item) ? 'bg-card-hover ring-1 ring-inset ring-accent-line' : '']">
+                <tr v-for="item in storyboardItems" :id="rowDomId(item.index)" :key="item.itemId" class="h-[112px] align-top transition hover:bg-card-hover/70" :class="[dirtyItemIds.has(item.itemId) ? 'bg-accent-soft/50' : '', isMergeSource(item) ? 'bg-accent-soft ring-1 ring-inset ring-accent-line' : '', canMergeWithPending(item) ? 'bg-card-hover ring-1 ring-inset ring-accent-line' : '']">
                   <td class="border-b border-border px-vt-2 py-vt-2 align-middle text-center">
                     <div class="mx-auto grid size-8 place-items-center rounded-vt-sm border border-border bg-page text-xs text-muted">#{{ item.index.toString().padStart(2, '0') }}</div>
                   </td>
                   <td class="border-b border-border px-vt-2 py-vt-2">
-                    <n-input :value="item.sourceText" class="inp compact-inp storyboard-cell-textarea" size="small" type="textarea" :placeholder="t('storyboard.sourceText')" @update:value="updateItem(item, { sourceText: $event })" />
+                    <div class="grid gap-vt-1">
+                      <button type="button" class="justify-self-end rounded-vt-sm border border-border bg-page px-vt-2 py-0.5 text-[11px] text-muted hover:border-border-strong hover:text-primary" @click="toggleItemLock(item, 'sourceText')">{{ lockButtonLabel(item, 'sourceText') }}</button>
+                      <n-input :value="item.sourceText" class="inp compact-inp storyboard-cell-textarea" size="small" type="textarea" :disabled="isItemLocked(item, 'sourceText')" :placeholder="t('storyboard.sourceText')" @update:value="updateItem(item, { sourceText: $event }, 'sourceText')" />
+                    </div>
                   </td>
                   <td class="border-b border-border px-vt-2 py-vt-2">
-                    <n-input :value="item.narrationText" class="inp compact-inp storyboard-cell-textarea" size="small" type="textarea" :placeholder="t('storyboard.narration')" @update:value="updateItem(item, { narrationText: $event })" />
+                    <div class="grid gap-vt-1">
+                      <button type="button" class="justify-self-end rounded-vt-sm border border-border bg-page px-vt-2 py-0.5 text-[11px] text-muted hover:border-border-strong hover:text-primary" @click="toggleItemLock(item, 'narrationText')">{{ lockButtonLabel(item, 'narrationText') }}</button>
+                      <n-input :value="item.narrationText" class="inp compact-inp storyboard-cell-textarea" size="small" type="textarea" :disabled="isItemLocked(item, 'narrationText')" :placeholder="t('storyboard.narration')" @update:value="updateItem(item, { narrationText: $event }, 'narrationText')" />
+                    </div>
                   </td>
                   <td class="border-b border-border px-vt-2 py-vt-2">
                     <n-input :value="item.visualGoal" class="inp compact-inp storyboard-cell-textarea" size="small" type="textarea" :placeholder="t('storyboard.intentPlaceholder')" @update:value="updateItem(item, { visualGoal: $event })" />
+                  </td>
+                  <td class="border-b border-border px-vt-2 py-vt-2">
+                    <button type="button" class="mb-vt-1 justify-self-end rounded-vt-sm border border-border bg-page px-vt-2 py-0.5 text-[11px] text-muted hover:border-border-strong hover:text-primary" @click="toggleItemLock(item, 'characters')">{{ lockButtonLabel(item, 'characters') }}</button>
+                    <n-select :value="item.characterIds" multiple size="small" clearable :disabled="isItemLocked(item, 'characters')" :options="characterOptions" :placeholder="t('storyboard.characterIdsPlaceholder')" @update:value="updateItem(item, { characterIds: normalizeSelectedCharacterIds($event) }, 'characters')" />
+                    <div class="mt-vt-2 truncate text-[11px] text-muted">{{ formatItemCharacters(item) }}</div>
+                  </td>
+                  <td class="border-b border-border px-vt-2 py-vt-2">
+                    <div class="grid gap-vt-2">
+                      <button type="button" class="justify-self-end rounded-vt-sm border border-border bg-page px-vt-2 py-0.5 text-[11px] text-muted hover:border-border-strong hover:text-primary" @click="toggleItemLock(item, 'location')">{{ lockButtonLabel(item, 'location') }}</button>
+                      <n-select :value="item.locationId" size="small" clearable :disabled="isItemLocked(item, 'location')" :options="locationOptions" :placeholder="t('storyboard.locationIdPlaceholder')" @update:value="updateLocationId(item, $event)" />
+                      <n-input v-if="!item.locationId" :value="item.sceneDescription" class="inp compact-inp" size="small" :disabled="isItemLocked(item, 'location')" :placeholder="t('storyboard.sceneDescriptionPlaceholder')" @update:value="updateItem(item, { sceneDescription: $event }, 'location')" />
+                      <div v-else class="truncate text-[11px] text-muted">{{ formatItemLocation(item) }}</div>
+                    </div>
                   </td>
                   <td class="border-b border-border px-vt-2 py-vt-2">
                     <div v-if="pendingMergeItemId" class="grid gap-vt-1">
@@ -119,17 +131,22 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { NButton, NInput, NInputNumber, useMessage } from 'naive-ui'
+import { NButton, NInput, NInputNumber, NSelect, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useProjectStore } from '@/entities/project/store'
+import { listProjectCharacterBibles, listProjectLocationBibles } from '@/entities/config/api'
+import type { CharacterBibleDto, LocationBibleDto } from '@/entities/config/types'
 import { useStoryboardStore } from '@/entities/storyboard/store'
 import { validateStoryboardItemsForImageGeneration, type StoryboardImageEntryField } from '@/entities/storyboard/validation'
 import type { RegenerateStoryboardRequest, StoryboardItemDto, StoryboardSplitMode } from '@/entities/storyboard/types'
 import { useTaskStore } from '@/entities/task/store'
-import WorkspaceStepBar from '@/features/workspace/WorkspaceStepBar.vue'
 import { getWorkspaceStepAccess, type WorkspaceStepKey } from '@/features/workspace/steps'
+import WorkspaceHeader from '@/features/workspace/WorkspaceHeader.vue'
+import WorkspaceRowJump from '@/features/workspace/WorkspaceRowJump.vue'
+import { isStoryboardItemLocked, setStoryboardItemLock } from '@/entities/storyboard/reset'
+import type { StoryboardItemLockField } from '@/entities/storyboard/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -146,6 +163,8 @@ const isSavingAll = ref(false)
 const isRegenerating = ref(false)
 const isRestoring = ref(false)
 const pendingMergeItemId = ref<string | null>(null)
+const characterBibles = ref<CharacterBibleDto[]>([])
+const locationBibles = ref<LocationBibleDto[]>([])
 const splitMode = ref<StoryboardSplitMode>('paragraph')
 const lineCount = ref(2)
 const sentenceCount = ref(1)
@@ -163,15 +182,76 @@ const storyboardItems = computed(() => storyboardStore.storyboard?.items ?? [])
 const pendingMergeItem = computed(() => storyboardItems.value.find((item) => item.itemId === pendingMergeItemId.value) ?? null)
 const isMockStoryboard = computed(() => storyboardItems.value.some((item) => item.visualDescription.startsWith('MOCK') || item.imagePrompt.startsWith('MOCK')))
 const workspaceAccess = computed(() => getWorkspaceStepAccess(storyboardItems.value, storyboardStore.storyboard?.reviewStatus))
+const characterOptions = computed(() => characterBibles.value.map((character) => ({ label: `${character.name} · ${character.characterId}`, value: character.characterId })))
+const locationOptions = computed(() => locationBibles.value.map((location) => ({ label: `${location.name} · ${location.locationId}`, value: location.locationId })))
+const resourceUsage = computed(() => ({
+  images: storyboardItems.value.reduce((total, item) => total + item.imageCandidates.length, 0),
+  videos: storyboardItems.value.reduce((total, item) => total + item.videoSegments.length, 0),
+  llm: null,
+}))
 
 onMounted(async () => {
   const [projectDetail] = await Promise.all([projectStore.loadProject(projectId), storyboardStore.loadStoryboard(projectId)])
+  const [characters, locations] = await Promise.all([listProjectCharacterBibles(projectId), listProjectLocationBibles(projectId)])
+  characterBibles.value = characters
+  locationBibles.value = locations
   aiTargetCount.value = projectDetail.project.targetSceneCount
 })
 
-function updateItem(item: StoryboardItemDto, patch: Partial<StoryboardItemDto>) {
+function updateItem(item: StoryboardItemDto, patch: Partial<StoryboardItemDto>, lockedField?: StoryboardItemLockField) {
+  if (lockedField && isItemLocked(item, lockedField)) {
+    message.warning(t('storyboard.fieldLocked', { field: lockFieldLabel(lockedField) }))
+    return
+  }
   Object.assign(item, patch)
   markItemDirty(item.itemId)
+}
+
+function isItemLocked(item: StoryboardItemDto, field: StoryboardItemLockField) {
+  return isStoryboardItemLocked(item, field)
+}
+
+function toggleItemLock(item: StoryboardItemDto, field: StoryboardItemLockField) {
+  Object.assign(item, setStoryboardItemLock(item, field, !isItemLocked(item, field)))
+  markItemDirty(item.itemId)
+}
+
+function lockButtonLabel(item: StoryboardItemDto, field: StoryboardItemLockField) {
+  return isItemLocked(item, field) ? t('common.unlock') : t('common.lock')
+}
+
+function lockFieldLabel(field: StoryboardItemLockField) {
+  return t(`storyboard.lockFields.${field}`)
+}
+
+function normalizeSelectedCharacterIds(value: Array<string | number>) {
+  return value.map(String).filter(Boolean)
+}
+
+function updateLocationId(item: StoryboardItemDto, value: string | null) {
+  if (isItemLocked(item, 'location')) {
+    message.warning(t('storyboard.fieldLocked', { field: lockFieldLabel('location') }))
+    return
+  }
+  const locationId = value?.trim() || null
+  const location = locationId ? locationBibles.value.find((entry) => entry.locationId === locationId) : null
+  updateItem(item, {
+    locationId,
+    sceneDescription: location ? location.name : item.sceneDescription,
+  })
+}
+
+function formatItemCharacters(item: StoryboardItemDto) {
+  if (item.characterIds.length === 0) return t('storyboard.noCharacterIds')
+  return item.characterIds
+    .map((characterId) => characterBibles.value.find((character) => character.characterId === characterId)?.name ?? characterId)
+    .join('、')
+}
+
+function formatItemLocation(item: StoryboardItemDto) {
+  if (!item.locationId) return item.sceneDescription || t('storyboard.noLocationId')
+  const location = locationBibles.value.find((entry) => entry.locationId === item.locationId)
+  return location ? `${location.name} · ${location.locationId}` : item.locationId
 }
 
 function markItemDirty(itemId: string) {
@@ -345,6 +425,14 @@ function cancelMerge() {
 
 function handleBlockedStep(step: WorkspaceStepKey) {
   message.warning(t(`workspaceStepBar.blocked.${step}`))
+}
+
+function rowDomId(index: number) {
+  return `storyboard-row-${index}`
+}
+
+function jumpToRow(index: number) {
+  document.getElementById(rowDomId(index))?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 }
 
 async function handleEnterImage() {

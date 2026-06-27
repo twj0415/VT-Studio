@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { margin: 0; width: 1080px; height: 1920px; overflow: hidden; background: #0f172a; }
+      img { width: 100%; height: 100%; object-fit: cover; transform: scale({{zoom_amount:range=1.05}}); }
+    </style>
+  </head>
+  <body data-template="frame" data-transition="{{transition_type:select=fade}}">
+    <img id="image" alt="" hidden />
+    <script>
+      function applyTemplateData() {
+        const payload = window.__VT_TEMPLATE_PAYLOAD__ || { data: {} };
+        const image = document.getElementById('image');
+        if (payload.data.image_path) {
+          image.src = '../../../../../' + String(payload.data.image_path);
+          image.hidden = false;
+        }
+      }
+      document.addEventListener('vt-template-data', applyTemplateData);
+      applyTemplateData();
+    </script>
+  </body>
+</html>

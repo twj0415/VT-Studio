@@ -1,11 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import CreateProjectPage from '@/pages/create-project/index.vue'
+import AiToolsPage from '@/pages/ai-tools/index.vue'
+import CreativeResourcesPage from '@/pages/creative-resources/index.vue'
 import CompositionPage from '@/pages/composition/index.vue'
 import HomePage from '@/pages/home/index.vue'
 import ImageGenerationPage from '@/pages/image-generation/index.vue'
+import ModelWorkflowPage from '@/pages/model-workflow/index.vue'
 import ProjectWorkbenchPage from '@/pages/project-workbench/index.vue'
-import ScriptEditorPage from '@/pages/script-editor/index.vue'
 import SettingsPage from '@/pages/settings/index.vue'
 import StoryboardEditorPage from '@/pages/storyboard-editor/index.vue'
 import VideoGenerationPage from '@/pages/video-generation/index.vue'
@@ -15,8 +17,10 @@ export const router = createRouter({
   routes: [
     { path: '/', name: 'home', component: HomePage },
     { path: '/create-project', name: 'create-project', component: CreateProjectPage },
+    { path: '/ai-tools', name: 'ai-tools', component: AiToolsPage },
+    { path: '/creative-resources', name: 'creative-resources', component: CreativeResourcesPage },
+    { path: '/model-workflow', name: 'model-workflow', component: ModelWorkflowPage },
     { path: '/projects/:projectId', name: 'project-workbench', component: ProjectWorkbenchPage },
-    { path: '/projects/:projectId/script', name: 'script-editor', component: ScriptEditorPage },
     { path: '/projects/:projectId/workspace/storyboard', name: 'storyboard-editor', component: StoryboardEditorPage },
     { path: '/projects/:projectId/workspace/image', name: 'image-generation', component: ImageGenerationPage },
     { path: '/projects/:projectId/workspace/video', name: 'video-generation', component: VideoGenerationPage },

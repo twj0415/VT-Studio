@@ -7,10 +7,22 @@
     "dev": "pnpm --dir src dev",
     "build": "pnpm --dir src build",
     "typecheck": "pnpm --dir src typecheck",
+    "verify": "powershell -ExecutionPolicy Bypass -File scripts/verify-mvp.ps1",
+    "verify:quick": "powershell -ExecutionPolicy Bypass -File scripts/verify-mvp.ps1 -SkipFullCargoTest -SkipFrontendBuild",
+    "verify:license-compliance": "powershell -ExecutionPolicy Bypass -File scripts/verify-license-compliance.ps1",
+    "verify:release-checklist": "powershell -ExecutionPolicy Bypass -File scripts/verify-release-checklist.ps1",
+    "verify:release-checklist:preflight": "powershell -ExecutionPolicy Bypass -File scripts/verify-release-checklist.ps1 -SkipTauriBuild",
+    "verify:release-policy": "powershell -ExecutionPolicy Bypass -File scripts/verify-release-policy.ps1",
+    "verify:release-resources": "powershell -ExecutionPolicy Bypass -File scripts/verify-release-resources.ps1",
+    "verify:release-smoke": "powershell -ExecutionPolicy Bypass -File scripts/verify-release-smoke.ps1",
     "tauri:dev": "tauri dev --config src-tauri/tauri.conf.json",
-    "tauri:build": "tauri build --config src-tauri/tauri.conf.json"
+    "tauri:build": "tauri build --config src-tauri/tauri.conf.json",
+    "tauri:build:windows": "tauri build --config src-tauri/tauri.conf.json --target x86_64-pc-windows-msvc --bundles nsis"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"
+  },
+  "dependencies": {
+    "playwright-core": "^1.61.1"
   }
 }

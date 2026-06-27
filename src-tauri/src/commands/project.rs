@@ -2,7 +2,8 @@ use crate::core::app_state::AppState;
 use crate::core::error::AppErrorDto;
 use crate::core::result::AppResult;
 use crate::domain::project::{
-    CreateProjectRequest, ListProjectsRequest, PageResult, ProjectDetailDto, ProjectSummaryDto,
+    CreateProjectRequest, GenerateProjectCoverRequest, ListProjectsRequest, PageResult,
+    ProjectDetailDto, ProjectSummaryDto, ReplaceProjectCoverImageRequest,
 };
 use crate::services::project_service;
 use tauri::State;
@@ -38,4 +39,22 @@ pub fn update_project(
     project_id: String,
 ) -> AppResult<ProjectDetailDto> {
     project_service::update_project(state.database(), project_id).map_err(AppErrorDto::from)
+}
+
+#[tauri::command]
+pub fn generate_project_cover(
+    state: State<'_, AppState>,
+    request: GenerateProjectCoverRequest,
+) -> AppResult<ProjectDetailDto> {
+    project_service::generate_project_cover(state.database(), state.workspace_root(), request)
+        .map_err(AppErrorDto::from)
+}
+
+#[tauri::command]
+pub fn replace_project_cover_image(
+    state: State<'_, AppState>,
+    request: ReplaceProjectCoverImageRequest,
+) -> AppResult<ProjectDetailDto> {
+    project_service::replace_project_cover_image(state.database(), state.workspace_root(), request)
+        .map_err(AppErrorDto::from)
 }

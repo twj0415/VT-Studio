@@ -1,8 +1,9 @@
 import type { StoryboardItemDto } from './types'
+import { hasValidSelectedImage, hasValidSelectedVideoSegment } from './reset'
 
 export type StoryboardImageEntryField = 'sourceText'
-export type StoryboardVideoEntryField = 'selectedImageId'
-export type StoryboardCompositionEntryField = 'selectedVideoSegmentId'
+export type StoryboardVideoEntryField = 'selectedImageId' | 'staleSelectedImage'
+export type StoryboardCompositionEntryField = 'selectedVideoSegmentId' | 'staleSelectedVideoSegment'
 
 export interface StoryboardValidationContext {
   validCharacterIds?: Iterable<string>
@@ -47,20 +48,34 @@ export function validateStoryboardItemsForImageGeneration(items: StoryboardItemD
 
 export function validateStoryboardItemsForVideoGeneration(items: StoryboardItemDto[]): StoryboardVideoEntryIssue[] {
   return items
-    .map((item) => ({
-      itemId: item.itemId,
-      index: item.index,
-      fields: item.selectedImageId ? [] : (['selectedImageId'] as StoryboardVideoEntryField[]),
-    }))
+    .map((item) => {
+      const fields: StoryboardVideoEntryField[] = []
+
+      if (!item.selectedImageId) fields.push('selectedImageId')
+      else if (!hasValidSelectedImage(item)) fields.push('staleSelectedImage')
+
+      return {
+        itemId: item.itemId,
+        index: item.index,
+        fields,
+      }
+    })
     .filter((issue) => issue.fields.length > 0)
 }
 
 export function validateStoryboardItemsForComposition(items: StoryboardItemDto[]): StoryboardCompositionEntryIssue[] {
   return items
-    .map((item) => ({
-      itemId: item.itemId,
-      index: item.index,
-      fields: item.selectedVideoSegmentId ? [] : (['selectedVideoSegmentId'] as StoryboardCompositionEntryField[]),
-    }))
+    .map((item) => {
+      const fields: StoryboardCompositionEntryField[] = []
+
+      if (!item.selectedVideoSegmentId) fields.push('selectedVideoSegmentId')
+      else if (!hasValidSelectedVideoSegment(item)) fields.push('staleSelectedVideoSegment')
+
+      return {
+        itemId: item.itemId,
+        index: item.index,
+        fields,
+      }
+    })
     .filter((issue) => issue.fields.length > 0)
 }

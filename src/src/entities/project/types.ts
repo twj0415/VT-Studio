@@ -1,5 +1,14 @@
 import type { AspectRatio, ContentLanguage, InputProcessMode, InputType, ProjectLifecycle, TaskStatus, WorkflowType } from '@/shared/enums/generated'
 import type { PageRequest } from '@/shared/types/generated'
+import type { CreativeRuleRefDto } from '@/entities/config/types'
+
+export interface NamedProjectAssetDto {
+  id: string
+  styleId?: string | null
+  characterId?: string | null
+  locationId?: string | null
+  name: string
+}
 
 export interface ProjectLatestTaskDto {
   taskId: string
@@ -20,6 +29,13 @@ export interface ProjectDto {
   targetSceneCount: number
   segmentDurationSeconds: number
   stylePrompt?: string
+  activePackId?: string
+  ruleRefs: Record<string, CreativeRuleRefDto>
+  executableRefs: Record<string, unknown>
+  coverPath?: string | null
+  coverTitle?: string | null
+  coverTemplateId?: string | null
+  coverSourceItemId?: string | null
   tone?: string
   contentLanguage: ContentLanguage
   lifecycle: ProjectLifecycle
@@ -38,9 +54,9 @@ export interface ProjectBibleDto {
 export interface ProjectDetailDto {
   project: ProjectDto
   projectBible: ProjectBibleDto
-  styleBible?: { styleId: string; name: string }
-  characterBibles: Array<{ characterId: string; name: string }>
-  locationBibles: Array<{ locationId: string; name: string }>
+  styleBible?: NamedProjectAssetDto | null
+  characterBibles: NamedProjectAssetDto[]
+  locationBibles: NamedProjectAssetDto[]
 }
 
 export interface ListProjectsRequest extends PageRequest {
@@ -63,6 +79,24 @@ export interface CreateProjectRequest {
   targetSceneCount: number
   segmentDurationSeconds: number
   stylePrompt?: string
+  activePackId?: string
+  ruleRefs?: Record<string, CreativeRuleRefDto>
+  executableRefs?: Record<string, unknown>
   inputProcessMode: InputProcessMode
   inputOptions?: Record<string, unknown>
+}
+
+export interface GenerateProjectCoverRequest {
+  projectId: string
+  coverTitle?: string
+  coverTemplateId?: string
+  coverSourceItemId?: string
+  sourceImagePath?: string
+}
+
+export interface ReplaceProjectCoverImageRequest {
+  projectId: string
+  sourcePath: string
+  coverTitle?: string
+  coverTemplateId?: string
 }

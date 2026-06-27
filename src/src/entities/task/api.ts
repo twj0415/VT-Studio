@@ -1,4 +1,5 @@
-import type { TaskDetailDto } from './types'
+import type { ListTasksRequest, RetryTaskStepRequest, TaskDetailDto, TaskProjectRequest, TaskSummaryDto } from './types'
+import type { TaskStepKind } from '@/shared/enums/generated'
 import { callCommand } from '@/shared/api/client'
 import { tauriCommands } from '@/shared/api/commands'
 import { getApiAdapter } from '@/shared/api/invoke'
@@ -11,18 +12,84 @@ export async function getTaskDetail(projectId: string): Promise<TaskDetailDto> {
   return {
     taskId: 'task_draft',
     projectId,
-    taskStatus: 'waiting_user',
+    taskStatus: 'running',
     currentStep: 'storyboard_review',
-    steps: [
-      { stepId: 'step_storyboard_review', stepName: 'storyboard_review', status: 'waiting_user' },
-      { stepId: 'step_image_review', stepName: 'image_review', status: 'pending' },
-      { stepId: 'step_video_review', stepName: 'video_review', status: 'pending' },
-      { stepId: 'step_final_composition', stepName: 'final_composition', status: 'pending' },
-    ],
+    steps: createMockPipelineSteps(),
   }
 }
 
-export async function approveTaskStep(projectId: string, stepName: string): Promise<TaskDetailDto> {
+export async function createTask(projectId: string): Promise<TaskDetailDto> {
+  if (getApiAdapter() === 'tauri') {
+    return callCommand<TaskDetailDto>(tauriCommands.createTask, { projectId })
+  }
+
+  return getTaskDetail(projectId)
+}
+
+export async function startTask(request: TaskProjectRequest): Promise<TaskDetailDto> {
+  if (getApiAdapter() === 'tauri') {
+    return callCommand<TaskDetailDto, { request: TaskProjectRequest }>(tauriCommands.startTask, { request })
+  }
+
+  return { ...(await getTaskDetail(request.projectId)), taskStatus: 'running' }
+}
+
+export async function cancelTask(request: TaskProjectRequest): Promise<TaskDetailDto> {
+  if (getApiAdapter() === 'tauri') {
+    return callCommand<TaskDetailDto, { request: TaskProjectRequest }>(tauriCommands.cancelTask, { request })
+  }
+
+  const detail = await getTaskDetail(request.projectId)
+  return {
+    ...detail,
+    taskStatus: 'cancelled',
+    currentStep: undefined,
+    steps: detail.steps.map((step) => (step.status === 'succeeded' ? step : { ...step, status: 'cancelled' })),
+  }
+}
+
+export async function resumeTask(request: TaskProjectRequest): Promise<TaskDetailDto> {
+  if (getApiAdapter() === 'tauri') {
+    return callCommand<TaskDetailDto, { request: TaskProjectRequest }>(tauriCommands.resumeTask, { request })
+  }
+
+  return getTaskDetail(request.projectId)
+}
+
+export async function retryTaskStep(request: RetryTaskStepRequest): Promise<TaskDetailDto> {
+  if (getApiAdapter() === 'tauri') {
+    return callCommand<TaskDetailDto, { request: RetryTaskStepRequest }>(tauriCommands.retryTaskStep, { request })
+  }
+
+  const detail = await getTaskDetail(request.projectId)
+  return {
+    ...detail,
+    taskStatus: 'running',
+    currentStep: request.stepName,
+    steps: detail.steps.map((step) => (step.stepName === request.stepName ? { ...step, status: 'pending' } : step)),
+  }
+}
+
+export async function listTasks(request: ListTasksRequest = {}): Promise<TaskSummaryDto[]> {
+  if (getApiAdapter() === 'tauri') {
+    return callCommand<TaskSummaryDto[], { request: ListTasksRequest }>(tauriCommands.listTasks, { request })
+  }
+
+  const projectId = request.projectId ?? 'draft'
+  return [
+    {
+      taskId: 'task_draft',
+      projectId,
+      taskStatus: 'running',
+      currentStep: 'storyboard_review',
+      summary: '等待确认分镜',
+      createdAt: '2026-06-22 10:00',
+      updatedAt: '2026-06-22 10:00',
+    },
+  ]
+}
+
+export async function approveTaskStep(projectId: string, stepName: TaskStepKind): Promise<TaskDetailDto> {
   if (getApiAdapter() === 'tauri') {
     return callCommand<TaskDetailDto>(tauriCommands.approveTaskStep, { projectId, stepName })
   }
@@ -30,23 +97,45 @@ export async function approveTaskStep(projectId: string, stepName: string): Prom
   return {
     taskId: 'task_draft',
     projectId,
-    taskStatus: stepName === 'final_composition' ? 'succeeded' : 'waiting_user',
+    taskStatus: stepName === 'cleanup' ? 'succeeded' : 'running',
     currentStep: nextStepName(stepName),
-    steps: [
-      { stepId: 'step_storyboard_review', stepName: 'storyboard_review', status: stepName === 'storyboard_review' ? 'succeeded' : 'waiting_user' },
-      { stepId: 'step_image_review', stepName: 'image_review', status: stepName === 'image_review' ? 'succeeded' : stepName === 'storyboard_review' ? 'waiting_user' : 'pending' },
-      { stepId: 'step_video_review', stepName: 'video_review', status: stepName === 'video_review' ? 'succeeded' : stepName === 'image_review' ? 'waiting_user' : 'pending' },
-      { stepId: 'step_final_composition', stepName: 'final_composition', status: stepName === 'final_composition' ? 'succeeded' : stepName === 'video_review' ? 'waiting_user' : 'pending' },
-    ],
+    steps: createMockPipelineSteps(stepName),
   }
 }
 
-function nextStepName(stepName: string) {
-  const next: Record<string, string | undefined> = {
-    storyboard_review: 'image_review',
-    image_review: 'video_review',
-    video_review: 'final_composition',
-    final_composition: undefined,
-  }
-  return next[stepName]
+function nextStepName(stepName: TaskStepKind): TaskStepKind | undefined {
+  const index = imageToVideoPipelineSteps.indexOf(stepName)
+  return index >= 0 ? imageToVideoPipelineSteps[index + 1] : undefined
+}
+
+const imageToVideoPipelineSteps: TaskStepKind[] = [
+  'project_init',
+  'storyboard_generation',
+  'storyboard_review',
+  'image_prompt_generation',
+  'image_generation',
+  'image_review',
+  'video_prompt_generation',
+  'video_generation',
+  'video_review',
+  'final_composition',
+  'export',
+  'cleanup',
+] as const
+
+function createMockPipelineSteps(approvedThrough?: TaskStepKind): TaskDetailDto['steps'] {
+  const approvedIndex = approvedThrough ? imageToVideoPipelineSteps.indexOf(approvedThrough) : 1
+  const currentStep = approvedThrough ? nextStepName(approvedThrough) : 'storyboard_review'
+
+  return imageToVideoPipelineSteps.map((stepName, index) => {
+    let status: TaskDetailDto['steps'][number]['status'] = 'pending'
+    if (index <= approvedIndex) status = 'succeeded'
+    if (stepName === currentStep && (stepName === 'storyboard_review' || stepName === 'image_review' || stepName === 'video_review')) status = 'waiting_user'
+    if (!approvedThrough && stepName === 'storyboard_review') status = 'waiting_user'
+    return {
+      stepId: `step_${stepName}`,
+      stepName,
+      status,
+    }
+  })
 }

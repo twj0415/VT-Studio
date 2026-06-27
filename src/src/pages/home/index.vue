@@ -24,7 +24,7 @@
         </div>
 
         <div class="project-grid">
-          <div v-for="project in filteredProjects" :key="project.projectId" class="pcard" @click="router.push(`/projects/${project.projectId}/workspace/storyboard`)" >
+          <div v-for="project in filteredProjects" :key="project.projectId" class="pcard" @click="router.push(`/projects/${project.projectId}`)" >
             <div class="ptop">
               <h3>{{ project.title }}</h3>
               <span class="src">{{ workflowTypeLabel(project.workflowType) }}</span>

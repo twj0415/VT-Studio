@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 
-import { createProject, getProjectDetail, listProjects } from './api'
-import type { CreateProjectRequest, ProjectDetailDto, ProjectSummaryDto } from './types'
+import { createProject, generateProjectCover, getProjectDetail, listProjects, replaceProjectCoverImage } from './api'
+import type { CreateProjectRequest, GenerateProjectCoverRequest, ProjectDetailDto, ProjectSummaryDto, ReplaceProjectCoverImageRequest } from './types'
 
 export const useProjectStore = defineStore('project', {
   state: () => ({
@@ -20,6 +20,16 @@ export const useProjectStore = defineStore('project', {
     },
     async loadProject(projectId: string) {
       this.currentProject = await getProjectDetail(projectId)
+      return this.currentProject
+    },
+    async generateCover(request: GenerateProjectCoverRequest) {
+      this.currentProject = await generateProjectCover(request)
+      await this.loadProjects()
+      return this.currentProject
+    },
+    async replaceCoverImage(request: ReplaceProjectCoverImageRequest) {
+      this.currentProject = await replaceProjectCoverImage(request)
+      await this.loadProjects()
       return this.currentProject
     },
   },

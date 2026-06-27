@@ -193,6 +193,21 @@ impl StorageService {
         self.to_stored_file(bucket, relative_path, absolute_path)
     }
 
+    pub fn write_bytes(
+        &self,
+        bucket: FileBucket,
+        relative_path: &str,
+        content: &[u8],
+        policy: FileAccessPolicy,
+    ) -> Result<StoredFile, String> {
+        ensure_write_allowed(bucket, policy)?;
+        let absolute_path = self
+            .resolver
+            .resolve_bucket_path_for_write(bucket, relative_path)?;
+        fs::write(&absolute_path, content).map_err(|error| error.to_string())?;
+        self.to_stored_file(bucket, relative_path, absolute_path)
+    }
+
     #[allow(dead_code)]
     pub fn copy_into_bucket(
         &self,

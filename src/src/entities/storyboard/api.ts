@@ -1,5 +1,7 @@
 export {
   approveStoryboard,
+  clearHistoricalImageCandidates,
+  clearHistoricalVideoSegments,
   createStoryboardDraftItem,
   getCompositionTask,
   getStoryboard,
