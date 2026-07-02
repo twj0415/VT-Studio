@@ -76,6 +76,12 @@ import type {
   FileManagementOpenResult,
 } from '@shared/types/file-management';
 import type {
+  BusinessSettingsRestoreDefaultChapterRegResult,
+  BusinessSettingsResult,
+  BusinessSettingsSavePayload,
+  BusinessSettingsSaveResult,
+} from '@shared/types/business-settings';
+import type {
   PromptListResult,
   PromptRestoreDefaultPayload,
   PromptRestoreDefaultResult,
@@ -199,6 +205,11 @@ export interface VtStudioApi {
     files: {
       listOpenableDirs: () => Promise<VtResponse<FileManagementListResult>>;
       openDir: (payload: FileManagementOpenPayload) => Promise<VtResponse<FileManagementOpenResult>>;
+    };
+    business: {
+      get: () => Promise<VtResponse<BusinessSettingsResult>>;
+      save: (payload: BusinessSettingsSavePayload) => Promise<VtResponse<BusinessSettingsSaveResult>>;
+      restoreDefaultChapterReg: () => Promise<VtResponse<BusinessSettingsRestoreDefaultChapterRegResult>>;
     };
     skill: {
       list: (payload?: SkillManagementListPayload) => Promise<VtResponse<SkillManagementListResult>>;

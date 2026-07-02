@@ -71,6 +71,11 @@ const api: VtStudioApi = {
       listOpenableDirs: () => ipcRenderer.invoke('settings:files:list-openable-dirs'),
       openDir: (payload) => ipcRenderer.invoke('settings:files:open-dir', payload),
     },
+    business: {
+      get: () => ipcRenderer.invoke('settings:business:get'),
+      save: (payload) => ipcRenderer.invoke('settings:business:save', payload),
+      restoreDefaultChapterReg: () => ipcRenderer.invoke('settings:business:restore-default-chapter-reg'),
+    },
     skill: {
       list: (payload) => ipcRenderer.invoke('settings:skill:list', payload),
       getContent: (payload) => ipcRenderer.invoke('settings:skill:get-content', payload),

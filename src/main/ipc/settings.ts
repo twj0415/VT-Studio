@@ -34,6 +34,7 @@ import type {
   DatabaseImportPayload,
 } from '@shared/types/database-management';
 import type { FileManagementOpenPayload } from '@shared/types/file-management';
+import type { BusinessSettingsSavePayload } from '@shared/types/business-settings';
 import type {
   VendorAddCodePayload,
   VendorCodePayload,
@@ -94,6 +95,7 @@ import {
   validateMemoryModelPath,
 } from '../services/settings/memory-settings';
 import { listOpenableDirectories, openDirectory } from '../services/settings/file-management';
+import { getBusinessSettings, restoreDefaultBusinessChapterReg, saveBusinessSettings } from '../services/settings/business-settings';
 import {
   checkDatabaseRunningTasks,
   clearAllDatabaseData,
@@ -139,6 +141,9 @@ export function registerSettingsIpc(): void {
   handleIpc('settings:memory:restore-default', () => restoreDefaultMemorySettings());
   handleIpc('settings:memory:validate-model-path', (_event, payload) => validateMemoryModelPath(readObjectArg<MemorySettingsValidateModelPathPayload>(payload)));
   handleIpc('settings:memory:clear', (_event, payload) => clearMemoryBySettings(readObjectArg<MemorySettingsClearPayload>(payload)));
+  handleIpc('settings:business:get', () => getBusinessSettings());
+  handleIpc('settings:business:save', (_event, payload) => saveBusinessSettings(readObjectArg<BusinessSettingsSavePayload>(payload)));
+  handleIpc('settings:business:restore-default-chapter-reg', () => restoreDefaultBusinessChapterReg());
   handleIpc('settings:files:list-openable-dirs', () => listOpenableDirectories());
   handleIpc('settings:files:open-dir', (_event, payload) => openDirectory(readObjectArg<FileManagementOpenPayload>(payload)));
   handleIpc('settings:database:info', () => getDatabaseManagementInfo());

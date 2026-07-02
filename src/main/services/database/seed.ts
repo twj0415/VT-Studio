@@ -35,6 +35,12 @@ const DEFAULT_SETTINGS: Array<{ key: string; value: string }> = [
   { key: 'modelOnnxFile',           value: JSON.stringify(['all-MiniLM-L6-v2', 'onnx', 'model_fp16.onnx']) },
   { key: 'modelDtype',              value: 'fp16' },
   { key: 'switchAiDevTool',         value: '0' },
+  { key: 'chapterReg',              value: '/第\\s*([0-9０-９零一二三四五六七八九十百千万]+)\\s*[章回节]\\s*([^\\n\\r]*)/g' },
+  { key: 'requestTimeoutMs',        value: '600000' },
+  { key: 'canvasWheelMode',         value: 'zoom' },
+  { key: 'showInteractionState',    value: 'true' },
+  { key: 'assetsBatchGenerateSize', value: '5' },
+  { key: 'scriptEpisodeLength',     value: '5000' },
 ];
 
 function seedSettings(db: Database.Database, now: number): void {
