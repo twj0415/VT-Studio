@@ -1,0 +1,22 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
+  "include": [
+    "src/renderer/**/*.ts",
+    "src/renderer/**/*.vue",
+    "src/shared/**/*.ts",
+    "src/renderer/env.d.ts"
+  ],
+  "compilerOptions": {
+    "incremental": false,
+    "tsBuildInfoFile": "./node_modules/.cache/vt-studio/tsconfig.web.tsbuildinfo",
+    "baseUrl": ".",
+    "paths": {
+      "@renderer/*": [
+        "src/renderer/src/*"
+      ],
+      "@shared/*": [
+        "src/shared/*"
+      ]
+    }
+  }
+}

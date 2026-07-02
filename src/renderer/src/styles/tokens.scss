@@ -1,0 +1,213 @@
+:root {
+  color-scheme: light;
+  --vt-surface-app: #f3efe7;
+  --vt-surface-panel: #fbfaf6;
+  --vt-surface-raised: #ffffff;
+  --vt-line-soft: rgba(32, 31, 27, 0.1);
+  --vt-line-strong: rgba(32, 31, 27, 0.18);
+  --vt-text-primary: #25231f;
+  --vt-text-secondary: #676157;
+  --vt-text-muted: #928a7b;
+  --vt-brand: #2f6f63;
+  --vt-brand-strong: #1f5149;
+  --vt-success: #2f7d4f;
+  --vt-warning: #9a641f;
+  --vt-danger: #a23b3b;
+  --vt-shadow-panel: 0 22px 80px rgba(37, 35, 31, 0.1);
+  --vt-td-brand-1: #eef7f4;
+  --vt-td-brand-2: #d8eee7;
+  --vt-td-brand-3: #b5ddd0;
+  --vt-td-brand-4: #84c2af;
+  --vt-td-brand-5: #56a28d;
+  --vt-td-brand-6: #2f6f63;
+  --vt-td-brand-7: #275b53;
+  --vt-td-brand-8: #1f5149;
+  --vt-td-brand-9: #173c37;
+  --vt-td-brand-10: #102b28;
+  --td-brand-color-1: var(--vt-td-brand-1);
+  --td-brand-color-2: var(--vt-td-brand-2);
+  --td-brand-color-3: var(--vt-td-brand-3);
+  --td-brand-color-4: var(--vt-td-brand-4);
+  --td-brand-color-5: var(--vt-td-brand-5);
+  --td-brand-color-6: var(--vt-td-brand-6);
+  --td-brand-color-7: var(--vt-td-brand-7);
+  --td-brand-color-8: var(--vt-td-brand-8);
+  --td-brand-color-9: var(--vt-td-brand-9);
+  --td-brand-color-10: var(--vt-td-brand-10);
+  --td-brand-color: var(--vt-td-brand-6);
+  --td-brand-color-hover: var(--vt-td-brand-5);
+  --td-brand-color-active: var(--vt-td-brand-7);
+  --td-brand-color-focus: var(--vt-td-brand-2);
+  --td-brand-color-disabled: var(--vt-td-brand-3);
+  --td-text-color-brand: var(--vt-td-brand-7);
+  --td-text-color-link: var(--vt-td-brand-7);
+  --td-text-color-link-hover: var(--vt-td-brand-6);
+  --td-text-color-link-active: var(--vt-td-brand-8);
+}
+
+:root,
+:root[data-theme-preset='studio'] {
+  --vt-surface-app: #f3efe7;
+  --vt-surface-panel: #fbfaf6;
+  --vt-surface-raised: #ffffff;
+  --vt-line-soft: rgba(32, 31, 27, 0.1);
+  --vt-line-strong: rgba(32, 31, 27, 0.18);
+  --vt-text-primary: #25231f;
+  --vt-text-secondary: #676157;
+  --vt-text-muted: #928a7b;
+  --vt-brand: #2f6f63;
+  --vt-brand-strong: #1f5149;
+  --vt-success: #2f7d4f;
+  --vt-warning: #9a641f;
+  --vt-danger: #a23b3b;
+  --vt-shadow-panel: 0 22px 80px rgba(37, 35, 31, 0.1);
+  --vt-td-brand-1: #eef7f4;
+  --vt-td-brand-2: #d8eee7;
+  --vt-td-brand-3: #b5ddd0;
+  --vt-td-brand-4: #84c2af;
+  --vt-td-brand-5: #56a28d;
+  --vt-td-brand-6: #2f6f63;
+  --vt-td-brand-7: #275b53;
+  --vt-td-brand-8: #1f5149;
+  --vt-td-brand-9: #173c37;
+  --vt-td-brand-10: #102b28;
+}
+
+html.dark,
+html.dark[data-theme-preset='studio'] {
+  color-scheme: dark;
+  --vt-surface-app: #181713;
+  --vt-surface-panel: #222019;
+  --vt-surface-raised: #2c2a22;
+  --vt-line-soft: rgba(244, 239, 228, 0.1);
+  --vt-line-strong: rgba(244, 239, 228, 0.18);
+  --vt-text-primary: #f6f2e9;
+  --vt-text-secondary: #c7bdab;
+  --vt-text-muted: #8e8474;
+  --vt-brand: #74a897;
+  --vt-brand-strong: #9ccbbb;
+  --vt-success: #75b88e;
+  --vt-warning: #d4a35e;
+  --vt-danger: #cf7777;
+  --vt-shadow-panel: 0 22px 80px rgba(0, 0, 0, 0.28);
+  --vt-td-brand-1: #182924;
+  --vt-td-brand-2: #1d3831;
+  --vt-td-brand-3: #244940;
+  --vt-td-brand-4: #2f6256;
+  --vt-td-brand-5: #4d8575;
+  --vt-td-brand-6: #74a897;
+  --vt-td-brand-7: #88b9a9;
+  --vt-td-brand-8: #9ccbbb;
+  --vt-td-brand-9: #bedfd2;
+  --vt-td-brand-10: #dff4ed;
+}
+
+:root[data-theme-preset='warm'] {
+  --vt-surface-app: #f6eee4;
+  --vt-surface-panel: #fdf7f0;
+  --vt-surface-raised: #fffaf5;
+  --vt-line-soft: rgba(66, 40, 24, 0.1);
+  --vt-line-strong: rgba(66, 40, 24, 0.18);
+  --vt-text-primary: #382b20;
+  --vt-text-secondary: #7a5c46;
+  --vt-text-muted: #a1846f;
+  --vt-brand: #b36a3c;
+  --vt-brand-strong: #8f4f27;
+  --vt-success: #6f8a49;
+  --vt-warning: #c47c1b;
+  --vt-danger: #b65444;
+  --vt-shadow-panel: 0 22px 80px rgba(56, 43, 32, 0.12);
+  --vt-td-brand-1: #fcf1ea;
+  --vt-td-brand-2: #f7e1d2;
+  --vt-td-brand-3: #f0c9af;
+  --vt-td-brand-4: #e0a37d;
+  --vt-td-brand-5: #cb8457;
+  --vt-td-brand-6: #b36a3c;
+  --vt-td-brand-7: #9b592f;
+  --vt-td-brand-8: #8f4f27;
+  --vt-td-brand-9: #6f3a17;
+  --vt-td-brand-10: #51280d;
+}
+
+html.dark[data-theme-preset='warm'] {
+  color-scheme: dark;
+  --vt-surface-app: #201712;
+  --vt-surface-panel: #2a201a;
+  --vt-surface-raised: #342922;
+  --vt-line-soft: rgba(255, 241, 229, 0.1);
+  --vt-line-strong: rgba(255, 241, 229, 0.18);
+  --vt-text-primary: #fff3e7;
+  --vt-text-secondary: #e2c5ae;
+  --vt-text-muted: #c09c7e;
+  --vt-brand: #d39a63;
+  --vt-brand-strong: #f0bc84;
+  --vt-success: #98b36f;
+  --vt-warning: #f0b15b;
+  --vt-danger: #d98673;
+  --vt-shadow-panel: 0 22px 80px rgba(0, 0, 0, 0.3);
+  --vt-td-brand-1: #332317;
+  --vt-td-brand-2: #4a3120;
+  --vt-td-brand-3: #65432a;
+  --vt-td-brand-4: #8b5d39;
+  --vt-td-brand-5: #b77f4c;
+  --vt-td-brand-6: #d39a63;
+  --vt-td-brand-7: #e0aa75;
+  --vt-td-brand-8: #f0bc84;
+  --vt-td-brand-9: #f6d2ab;
+  --vt-td-brand-10: #ffead6;
+}
+
+:root[data-theme-preset='work'] {
+  --vt-surface-app: #eef2f6;
+  --vt-surface-panel: #f8fafc;
+  --vt-surface-raised: #ffffff;
+  --vt-line-soft: rgba(30, 41, 59, 0.1);
+  --vt-line-strong: rgba(30, 41, 59, 0.18);
+  --vt-text-primary: #1f2937;
+  --vt-text-secondary: #475569;
+  --vt-text-muted: #64748b;
+  --vt-brand: #2563eb;
+  --vt-brand-strong: #1d4ed8;
+  --vt-success: #15803d;
+  --vt-warning: #b45309;
+  --vt-danger: #b91c1c;
+  --vt-shadow-panel: 0 22px 80px rgba(15, 23, 42, 0.1);
+  --vt-td-brand-1: #eef4ff;
+  --vt-td-brand-2: #d9e7ff;
+  --vt-td-brand-3: #b7d0ff;
+  --vt-td-brand-4: #84adff;
+  --vt-td-brand-5: #5b8eff;
+  --vt-td-brand-6: #2563eb;
+  --vt-td-brand-7: #1d4ed8;
+  --vt-td-brand-8: #183ea8;
+  --vt-td-brand-9: #132e7c;
+  --vt-td-brand-10: #0d1f56;
+}
+
+html.dark[data-theme-preset='work'] {
+  color-scheme: dark;
+  --vt-surface-app: #0f172a;
+  --vt-surface-panel: #111827;
+  --vt-surface-raised: #162033;
+  --vt-line-soft: rgba(226, 232, 240, 0.1);
+  --vt-line-strong: rgba(226, 232, 240, 0.18);
+  --vt-text-primary: #e5edf8;
+  --vt-text-secondary: #b5c3d9;
+  --vt-text-muted: #8291aa;
+  --vt-brand: #60a5fa;
+  --vt-brand-strong: #93c5fd;
+  --vt-success: #4ade80;
+  --vt-warning: #f59e0b;
+  --vt-danger: #f87171;
+  --vt-shadow-panel: 0 22px 80px rgba(0, 0, 0, 0.32);
+  --vt-td-brand-1: #12233f;
+  --vt-td-brand-2: #193356;
+  --vt-td-brand-3: #204671;
+  --vt-td-brand-4: #2f619c;
+  --vt-td-brand-5: #4b84d0;
+  --vt-td-brand-6: #60a5fa;
+  --vt-td-brand-7: #7ab5fb;
+  --vt-td-brand-8: #93c5fd;
+  --vt-td-brand-9: #bddcff;
+  --vt-td-brand-10: #e0f0ff;
+}
